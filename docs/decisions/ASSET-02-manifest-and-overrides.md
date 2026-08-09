@@ -1,0 +1,347 @@
+# ASSET-02 Pack manifest, dependencies, overrides, and conversion
+
+Status: Proposed
+
+Owner: Asset-contract research sprint  
+Date researched: 2026-08-09  
+Related spec: [`../../design_doc.md`](../../design_doc.md)
+
+## Decision
+
+Recommended choice: Use a strict, versioned, **resource-only** `pack.json`; resolve one immutable resource-pack version per package ID into a deterministic dependency DAG and exact content lock; allow only declared whole-asset overlays of required resource packs; and implement Minecraft compatibility as edition/version-specific offline conversion into an ordinary `.vcpak`. Future data packs, sandbox components, and native plugins may share resolver vocabulary but require distinct extensions, manifests, parsers, and trust UI.
+
+One-sentence rationale: Package identity, API compatibility, load order, and byte agreement are different concerns, so recording each explicitly prevents accidental last-file-wins behavior and avoids freezing VibeCraft around Minecraft's changing schemas.
+
+The first-party `vibecraft.base` art pack is not privileged by the loader. It is an ordinary required resource package, lowest in the selected profile, and can be overlaid only through the same declared rules as another package.
+
+## Context and constraints
+
+- The client must know what a pack is, what it requires, which namespaces it owns, which foreign assets it intends to replace, and which engine capabilities its descriptors require before decoding expensive media.
+- Resource packs, declarative data, sandboxed modules, and trusted native plugins have different trust, side, parsers, and failure policies. They may later share `(artifact_kind, package_id, version, digest, requires)` resolver vocabulary, but a resource artifact can never become executable by adding a manifest field.
+- A version string is human/publisher intent; it does not prove byte identity. `ASSET-01` provides `LogicalContentDigest`, and `NET-09` binds the resolved lock declaration to an authenticated session.
+- Unordered directory discovery and “last loaded wins” are not acceptable semantics. The same profile must resolve identically on every platform.
+- Cosmetic replacement is useful, but undeclared cross-package replacement masks typos and lets an unrelated pack hijack assets.
+- V1 needs whole-asset replacement. Generic JSON merge, inheritance across package boundaries, and deletion/tombstone semantics would each become a second schema and are not justified yet.
+- Minecraft Java and Bedrock have different pack contracts. Conversion must name edition and source version and produce a report rather than silently dropping unsupported features.
+
+## Options considered
+
+| Option | Strengths | Costs/risks | Fit for VibeCraft |
+| --- | --- | --- | --- |
+| Filesystem order plus last-file-wins | Minimal loader code; familiar texture-pack behavior | Platform/discovery nondeterminism, typo masking, hijacks, no dependency diagnostics | Rejected |
+| User-ordered stack with no manifests | Simple cosmetic overlays | Cannot resolve libraries, versions, capabilities, namespace owners, or server locks | Rejected |
+| **Strict manifests + dependency DAG + declared whole-asset overlays + exact lock** | Deterministic, diagnosable, reproducible, supports first/third-party parity | Resolver/tooling work; authors must state intent | **Recommended** |
+| Generic deltas/JSON merge patches | Small patches and composability | Type-specific merge semantics, ordering conflicts, schema/version debt, difficult provenance | Defer until a concrete high-value use case exists |
+| Embed/import Minecraft metadata at runtime | Quick apparent compatibility | Edition/version ambiguity; foreign semantics become permanent runtime API; unsupported extensions fail unpredictably | Rejected; offline converter only |
+| UUID-only package identity | Easy generation and rename tolerance | Poor diagnostics/discovery and author UX; UUID/version still does not prove bytes | Rejected as primary identity; signatures may use separate key IDs later |
+
+## Evidence
+
+### Minecraft
+
+**Java Edition official release notes.** Java's resource-pack format is explicitly versioned and keeps evolving. Java 1.20.2 added compatibility ranges and ordered in-pack overlays; Java 1.21.9 changed pack versions to major/minor semantics and revised `pack.mcmeta`; Java 1.20.3 gave downloaded server packs UUIDs and hashes and allowed multiple server packs ([Java 1.20.2](https://feedback.minecraft.net/hc/en-us/articles/19703470383757-Minecraft-Java-Edition-1-20-2), [Java 1.21.9](https://www.minecraft.net/en-us/article/minecraft-java-edition-1-21-9), [Java 1.20.3](https://www.minecraft.net/en-us/article/minecraft-java-edition-1-20-3)). This is direct evidence that version, pack identity, stack order, and hash are distinct pieces of metadata.
+
+**Bedrock Edition official documentation.** Bedrock requires a manifest with unique IDs, pack/module versions, minimum engine version, module kinds, and dependencies; dependencies cause required packs/modules to load first ([manifest reference](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/addonsreference/packmanifest), [dependency reference](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/manifestreference/dependency)). Microsoft separately documents identifier-based replacement of models, animations, and controllers ([overwriting assets](https://learn.microsoft.com/en-us/minecraft/creator/documents/overwritingassets)). This validates explicit metadata and identity, while Bedrock's separate semantics reinforce conversion rather than a generic “Minecraft pack” mode.
+
+Official cooperative-add-on guidance asks paired behavior/resource packs to depend on each other and recommends creator-specific prefixes because many contained identifiers are globally collision-prone ([cooperative add-on guidance](https://learn.microsoft.com/en-us/minecraft/creator/documents/practices/guidelinesforbuildingcooperativeaddons)). VibeCraft should make namespace ownership enforceable instead of advisory and should reject dependency cycles rather than recommend mutual dependencies.
+
+### Luanti
+
+Luanti `mod.conf` supports required and optional load-before dependencies. Its media rules discourage but permit a mod to overwrite equal-named media from a dependency; registered `modname:name` identifiers are enforced to avoid collisions, and overriding another registration requires a dependency plus explicit override syntax ([Luanti mod/media API](https://api.luanti.org/mods/), [client mod format](https://github.com/luanti-org/luanti/blob/master/doc/client_lua_api.md)). The dependency-plus-explicit-override pattern is useful. Global media filenames and absence of package version constraints in that path are cautions.
+
+### Terasology
+
+Terasology's `module.txt` records module ID, semantic-style version, and dependencies with inclusive minimum, exclusive maximum, optional, and side-related flags. Modules own `assets`, `deltas`, and `overrides` directories ([Terasology module documentation](https://metaterasology.github.io/docs/concepts/modules.html)). This demonstrates a mature package graph and explicit modification areas. It also shows the conceptual cost of deltas in addition to overrides; VibeCraft v1 keeps one replacement operation.
+
+### Versioning and validation standards
+
+Semantic Versioning 2.0.0 distinguishes incompatible API changes, backward-compatible additions, and fixes, and says released version contents must not be modified ([SemVer 2.0.0](https://semver.org/spec/v2.0.0.html)). VibeCraft uses that vocabulary for package releases and asset API compatibility, while still locking exact content digests because publisher version discipline is not machine proof.
+
+JSON Schema Draft 2020-12 provides a standardized way to publish and test machine-readable manifest/descriptor constraints ([JSON Schema 2020-12](https://json-schema.org/draft/2020-12)). The shipping loader remains the authority and uses strict duplicate-property and unknown-property checks; a schema file is tooling, not a substitute for bounded parsing.
+
+### Sourced conclusions versus inference
+
+Directly sourced:
+
+- Minecraft, Luanti, and Terasology all separate package/dependency metadata from asset files.
+- Minecraft Java and Bedrock use materially different version and manifest systems.
+- Luanti ties intentional registration/media replacement to dependency relationships.
+- Package version and downloaded-content hash are represented separately in Minecraft's server-pack path.
+
+VibeCraft engineering inference:
+
+- An override should be legal only when the overriding package names a required target and a bounded asset prefix; otherwise a duplicate key should be an error.
+- Whole-asset replacement is sufficient for initial texture/model packs and produces one clear origin for every resolved asset.
+- Exact resolved locks belong to profiles/worlds/servers, while compatible version ranges belong to reusable package manifests.
+
+## Proposed design
+
+### Machine identifiers and versions
+
+- `id`: stable package ID, 3–128 lowercase ASCII characters, dot-separated segments using `[a-z0-9][a-z0-9_-]*`; example `example.high_res`. It is never inferred from the filename or display title.
+- `version`: a full SemVer 2.0.0 value. A published `(id, version)` must be immutable; two installed artifacts with the same ID/version and different content digests are a hard ambiguity, not an update.
+- `manifest_schema`: positive integer. V1 is `1`. Unknown values are rejected.
+- `asset_api`: a VibeCraft-owned SemVer comparator set describing pack-contract semantics, independent of the game's marketing/build version.
+- `namespaces`: lowercase canonical namespaces owned by the package, following `ASSET-01`. Two selected packages cannot own the same namespace.
+- user-facing title/description/authors: bounded Unicode metadata; never used as identity.
+
+Version-range grammar in v1 is deliberately small: one or more whitespace-separated comparators from `=`, `>=`, `>`, `<=`, and `<`, each followed by a full SemVer value. Empty ranges, wildcards, caret, tilde, implicit versions, and boolean OR are rejected. Example: `>=1.2.0 <2.0.0`. Pre-release versions match only a comparator set that contains a pre-release comparator for the same major/minor/patch tuple or an exact pre-release selection.
+
+### `pack.json` schema shape
+
+Illustrative valid resource-pack manifest:
+
+```json
+{
+  "manifest_schema": 1,
+  "id": "example.high_res",
+  "version": "1.4.2",
+  "asset_api": ">=1.0.0 <2.0.0",
+  "title": "Example High Resolution",
+  "description": "64 px first-party-style material replacements",
+  "authors": ["Example Studio"],
+  "license": "CC-BY-4.0",
+  "homepage": "https://example.invalid/high-res",
+  "artifact_kind": "resource_pack",
+  "namespaces": ["example"],
+  "requires": [
+    { "id": "vibecraft.base", "version": ">=1.0.0 <2.0.0" }
+  ],
+  "optional_requires": [],
+  "overrides": [
+    {
+      "target": "vibecraft.base",
+      "version": ">=1.0.0 <2.0.0",
+      "rules": [
+        { "namespace": "vibecraft", "kind": "textures", "path_prefix": "block/" },
+        { "namespace": "vibecraft", "kind": "materials", "path_prefix": "block/" }
+      ]
+    }
+  ],
+  "required_capabilities": [
+    "material.voxel_pbr@1"
+  ],
+  "metadata": {
+    "source_repository": "https://example.invalid/repository"
+  }
+}
+```
+
+Rules:
+
+- JSON is UTF-8 without comments. Duplicate object properties, non-finite numbers, invalid Unicode, or unknown fields outside `metadata` are errors.
+- `artifact_kind` is exactly `resource_pack` in `pack.json`. `.vcpak` permits only the `ASSET-01` resource tree. `data_pack`, `sandbox_component` (`.vcmod`/`mod.json`), and `native_plugin` (`native-plugin.json` in a trusted local/operator directory) are separate future artifact contracts and cannot be embedded or selected through this parser.
+- Cross-kind overrides are forbidden. A future sandbox component that needs art depends on a `.vcpak`; it does not hide assets or executable code in the other artifact.
+- `license` is SPDX-expression-shaped metadata where possible but is not interpreted as permission by the loader. Missing/unknown licensing is shown to users and repositories; it is not silently invented.
+- `metadata` values are informational, bounded JSON and do not affect resolution. Keys beginning `x-` may be used there by tools. The resolver never executes URLs or fetches dependencies.
+- `logical_content_sha256`, `artifact_sha256`, `artifact_length`, install path, user priority, signatures, and resolved dependency versions are absent. They are properties of an artifact/profile/lock, not publisher-authored claims inside the artifact.
+
+The project should publish the normative JSON Schema and golden valid/invalid fixtures beside the eventual loader. The C# parser must enforce the same constraints without first materializing an unbounded generic object graph.
+
+### Package selection and dependency resolution
+
+A content profile selects top-level `(package id, desired version/range)` entries in explicit low-to-high user priority. It always includes the exact shipped-compatible `vibecraft.base` requirement.
+
+Resolution algorithm:
+
+1. Discover only `ASSET-01`-valid package images and parse their bounded manifests.
+2. Reject ambiguous duplicate `(id, version)` artifacts with different content digests.
+3. Starting from selected roots, choose **one installed version per package ID** satisfying every accumulated required constraint. Prefer the highest stable SemVer; use a pre-release only when explicitly selected/allowed. The resolver never downloads.
+4. Include an `optional_requires` edge only when a selected/installed version satisfying its range exists. An absent optional dependency is not an error; a present but incompatible version is reported and treated as absent unless another required edge selects it.
+5. Build edges from dependency to dependent. Reject required dependency cycles and override cycles with the complete cycle path. Optional edges that create a cycle are dropped with a warning recorded in the lock.
+6. Validate package capability requirements against the engine's declared capability set before parsing assets.
+7. Validate unique namespace ownership and every foreign-namespace write/duplicate through the override rules below.
+8. Topologically order dependencies before dependents. Among independent selected roots, preserve the user's low-to-high order. Lexical package ID is only a deterministic diagnostic/iteration tie-breaker and never grants override priority.
+9. Resolve every asset key, validate all references against the final view, compile a staging snapshot, and emit an exact lock.
+
+If constraints have no single-version solution, resolution fails with the shortest useful explanation: requesting package, required range, available versions, and conflicting edge. V1 does not load two versions of one package ID or privately scope asset namespaces per dependency.
+
+### Override authorization and precedence
+
+Writing an asset in a namespace listed under `namespaces` is an ordinary definition. Writing the same `AssetKey` supplied by another selected package is legal only through an `overrides` entry satisfying all of these conditions:
+
+1. `target` appears in this package's `requires` list, not only `optional_requires`.
+2. The selected target version satisfies both the dependency and override ranges.
+3. The asset key's namespace, kind, and path match one explicit rule.
+4. The overriding package is later than the target by dependency order.
+5. The replacement file independently validates as that asset kind.
+
+`path_prefix` is a canonical asset path prefix ending in `/`, or the empty string for the entire named kind/namespace. It is literal ordinal text, not a glob or regular expression. Exact-single-asset replacement uses the full asset path in an `assets` rule added to the schema rather than abusing prefixes; v1 may support both forms:
+
+```json
+{
+  "namespace": "vibecraft",
+  "kind": "models",
+  "assets": ["block/chest", "block/trapped_chest"]
+}
+```
+
+Precedence/failure policy:
+
+- Dependencies are always lower than dependents.
+- Two independent top-level overlay packs authorized to replace the same lower asset use the user's explicit low-to-high profile order; the UI shows the full override chain and winner.
+- If two transitive packages collide and no explicit top-level ordering establishes a winner, resolution fails instead of choosing discovery or lexical order.
+- An unrelated duplicate key, undeclared foreign-namespace asset, override outside its prefix, or target-version mismatch is fatal.
+- Replacement is the complete logical asset. There is no generic JSON deep merge, array concatenation, delete marker, tombstone, or implicit parent inheritance across packages.
+- An override can replace assets, not another package's manifest, namespace ownership, dependency declarations, capability requirements, lock metadata, or license/provenance record.
+- References inside the final snapshot resolve normally, so a texture-only overlay can intentionally affect an unchanged material/model. The compiler reports the effective origin chain for each reference.
+
+This model intentionally differs from Java's broad ordered stack and Godot's same-path project replacement: order matters only after explicit authorization.
+
+### Capabilities and API evolution
+
+The engine advertises an `asset_api` version and namespaced capability versions such as:
+
+```text
+model.cuboid@1
+model.gltf_core@1
+animation.graph@1
+material.voxel_pbr@1
+material.transmission@1       // only if RENDER-06 later greenlights it
+```
+
+A pack lists every non-baseline capability needed to preserve intended meaning. Unknown/missing required capability rejects the package; the loader does not silently ignore a material/model feature. Optional visual enhancements require an asset-type-defined fallback in the descriptor, not a manifest flag that magically makes unknown fields safe.
+
+Version responsibilities:
+
+- `manifest_schema` changes when manifest syntax/meaning is incompatible.
+- `asset_api` changes when cross-type resolver/descriptor contracts change.
+- each descriptor has its own schema major (`vibecraft.model/1`, and so on).
+- capability versions describe optional feature contracts.
+- package `version` changes when that publisher releases new package contents.
+- engine/game build version is diagnostic only unless a separate explicit compatibility field is proven necessary.
+
+The loader supports migration/conversion tools between asset API majors; it does not mutate installed packages in place. A package claiming one released version with new bytes is rejected by repositories/locks as publisher error.
+
+### Exact content lock and atomic activation
+
+The resolver writes a canonical lock for profiles, worlds, and `NET-09`:
+
+```text
+ContentLockV1 {
+  lock_schema: 1
+  asset_api: exact engine asset API
+  packages_low_to_high[] {
+    id
+    version
+    artifact_kind              // resource_pack in this v1 contract
+    logical_content_sha256     // ASSET-01 logical-map digest
+    artifact_sha256?           // literal download artifact integrity only
+    artifact_length?           // paired with artifact_sha256
+    resolved_required_ids[]
+    resolved_optional_ids[]
+    required_capabilities[]
+  }
+  dropped_optional_edges[]
+  effective_asset_map_digest
+  lock_sha256
+}
+```
+
+V1 lock encoding is RFC 8785 canonical JSON with no floats, duplicate keys, invalid Unicode, or integers outside the interoperable safe range; identity/version/digest values are strings. `effective_asset_map_digest` hashes sorted `(AssetKey, winning package LogicalContentDigest, winning canonical path)` records. `lock_sha256` covers the complete canonical lock except itself. A later encoding requires a new lock schema/domain.
+
+Activation is transactional:
+
+```text
+discover -> resolve -> validate -> compile staging snapshot
+         -> compare/record lock -> swap snapshot at frame boundary
+         -> retire old snapshot after handles/jobs drain
+```
+
+Any failure before swap leaves the old profile active. Resource-only hot reload may use this flow in developer/local mode. It does not promise that data registries, executable mods, live worlds, or multiplayer content can be hot-swapped. A connected server lock remains fixed for that session unless a future protocol explicitly coordinates a content transition.
+
+### Minecraft offline conversion boundary
+
+No VibeCraft runtime loader recognizes `pack.mcmeta`, Bedrock `manifest.json`, Minecraft `format_version`, resource locations, model inheritance, Molang, OptiFine/CIT conventions, or Minecraft pack precedence. The conversion CLI owns those semantics:
+
+```text
+vibecraft-content import minecraft-java \
+  --source <directory-or-zip> \
+  --source-version 1.20.2 \
+  --package-id user.imported_pack \
+  --out user.imported_pack.vcpak
+
+vibecraft-content import minecraft-bedrock \
+  --source <directory-or-mcpack> \
+  --source-version 1.21.80 \
+  --package-id user.imported_pack \
+  --out user.imported_pack.vcpak
+```
+
+Separate converter profiles are versioned and tested against exact edition/version fixtures. The source version is required; “auto” may offer a guess but cannot produce a release artifact until the user confirms it.
+
+The converter:
+
+1. opens the source through the same bounded, non-extracting archive policy;
+2. parses only its declared Minecraft edition/version plus explicitly supported extension profiles;
+3. maps known Minecraft asset IDs to VibeCraft native asset keys through a versioned mapping table;
+4. emits native manifests/descriptors/media and explicit override rules against `vibecraft.base` where mappings exist;
+5. copies/decodes only user-supplied assets the user is entitled to use; it never bundles missing vanilla Minecraft assets from the game or a network service;
+6. validates the generated native pack through the normal VibeCraft packager;
+7. emits a deterministic conversion report beside the output.
+
+```text
+ConversionReportV1 {
+  tool_version
+  source_edition
+  source_version
+  source_content_digest
+  mapping_table_version
+  output_package_id/version/content_digest
+  converted[] { source_path, source_identifier?, output_asset_keys[] }
+  warnings[]  { code, source_path, message, suggested_action? }
+  errors[]    { code, source_path, message }
+  unsupported[] { feature, count, source_paths[] }
+}
+```
+
+Java cuboid models/blockstates, textures, sounds, language files, and simple animation metadata can map where native equivalents exist. Bedrock geometry/animations/controllers require their own mapping. Core shaders, arbitrary Molang expressions, edition-specific render controllers, custom third-party extensions, and unsupported blend/material behavior are reported, never silently approximated. The generated pack contains provenance metadata, but no `minecraft:` namespace receives special runtime meaning.
+
+Conversion success means “valid native output with a reviewed report,” not visual or behavioral parity. The tool should support incremental re-conversion from source; users should not hand-edit generated output without either forking it or accepting that regeneration replaces it.
+
+## Greenlight criteria
+
+- Given the same installed artifacts and selected profile, resolution produces byte-identical canonical locks and effective asset maps regardless of filesystem enumeration, archive order, locale, OS, or process hash randomization.
+- The resolver reports actionable paths for missing requirements, unsatisfied ranges, duplicate ID/version bytes, namespace collisions, required/optional cycles, unknown capabilities, and unauthorized/ambiguous overrides.
+- Every effective asset has exactly one winning origin plus a complete ordered override chain; no collision is settled by directory discovery or dictionary insertion order.
+- Package `version`, asset API compatibility, content digest, literal download hash, and publisher trust are separately represented in code/UI/tests.
+- Activation is all-or-nothing: corrupting any required descriptor leaves the previous snapshot and lock active.
+- A Java and a Bedrock fixture with the same marketing content use separate converters, produce only native VibeCraft files, and report every dropped/approximated source construct.
+- Joining with a `NET-09` lock detects a one-byte package change, changed stack order, changed effective winner, missing package, and incompatible capability before world admission.
+
+## Prototype or benchmark
+
+Required: yes.
+
+Smallest useful experiment: Build a headless resolver/packager for `vibecraft.base`, two independent texture overlays, one shared material dependency, and one malformed package for every failure class. Add a fake Java 1.20.2 input converter that maps two textures, one cuboid model, one blockstate, and one unsupported shader/extension into a native pack plus report.
+
+Success metrics:
+
+- Shuffle package discovery and dictionary insertion 10,000 times; obtain one lock/digest and one asset-origin report.
+- Resolve 100 packages, 1,000 dependency edges, and 100,000 asset keys in under 250 ms after manifests/indexes are cached on the eventual minimum-spec desktop, with bounded linear memory.
+- Exhaustive fixtures cover every comparator boundary, prerelease rule, cycle shape, duplicate namespace/key, override-prefix edge, optional-edge drop, and conflicting top-level order.
+- A failed staged reload changes zero active asset handles and leaks no archive/cache handles after retirement.
+- Re-running the converter with identical source/tool/mapping versions yields the same native content digest and conversion report; every unsupported construct appears with a stable code and source path.
+
+## Risks and open questions
+
+- A package repository, acquisition URLs, publisher signatures, revocation, and trust UI are separate distribution/security decisions. A signature proves provenance, not safety or quality.
+- Optional dependencies can create environment-dependent output; the exact lock makes that visible, but authors should prefer required dependencies or explicit fallbacks.
+- Overlay packs can intentionally create visually misleading content. Public servers need `NET-09` policy for free, allowlisted, or exact cosmetic packs.
+- One resolver implementation may later coordinate distinct artifact classes, but this decision greenlights only resource packs. It must not be generalized into an executable shared manifest without a separate security decision.
+- Whether worlds store their historical resource lock for faithful screenshots/replays is a product decision; authoritative save compatibility must not depend on cosmetic resources.
+
+## Dependencies
+
+- Requires: `ASSET-01`, `MOD-03`, `NET-07` capability-version principles.
+- Blocks: `ASSET-03`, `ASSET-04`, `ASSET-05`, pack/profile UI, resource hot reload, `NET-09`, converter implementation.
+
+## Rejected or deferred alternatives
+
+- Native runtime interpretation of any Minecraft edition: rejected.
+- Inferring edition/version or silently accepting “close enough” Minecraft input: rejected for release conversion.
+- Last-file-wins without dependency and override authorization: rejected.
+- Generic deep merge, JSON Patch, deletion/tombstones, and cross-package inheritance: deferred.
+- Multiple active versions of one package ID: rejected for v1.
+- Resolver downloads or executes acquisition URLs: rejected; installation is a separate user-mediated workflow.
+- Treating version equality, UUID equality, signatures, or hashes as interchangeable: rejected.
