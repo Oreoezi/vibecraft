@@ -8,17 +8,32 @@ Related spec: [`../../design_doc.md`](../../design_doc.md)
 
 ## Decision
 
-Recommended choice: Use small, strict VibeCraft JSON descriptors for visual meaning and references; use native cuboid elements for chunk-baked block geometry and validated binary glTF 2.0 (`.glb`) for arbitrary static/skinned geometry and keyframe clips; compile both into engine-private render templates and a constrained presentation-only animation graph.
+Recommended choice: Use small, strict VibeCraft JSON descriptors for visual meaning and
+references; use native cuboid elements for chunk-baked block geometry; and define
+first-party `RigProfile` contracts for replaceable animated models. The engine-neutral
+native model/rig source format is intentionally unselected until a focused format and
+tooling spike; every accepted source format compiles into engine-private render tables.
 
-One-sentence rationale: glTF solves portable mesh/skin/keyframe delivery but not voxel face culling, block-state selection, material-slot replacement, playback policy, gameplay authority, or safe state-machine expressions, so those remain explicit VibeCraft contracts.
+One-sentence rationale: Voxel culling, semantic rigs, material slots, playback policy,
+gameplay authority, and safe state-machine expressions are VibeCraft contracts; the
+source container must serve those contracts rather than define them.
+
+### Owner decision — 2026-08-10
+
+GLB/glTF is not the native public-pack model format. The retained GLB material below is
+research evidence for a possible offline authoring importer only and must not be
+implemented as the pack contract. Custom model replacement reuses VibeCraft rig
+profiles—not Minecraft bone layouts—and user-authored skeletal clips are deferred.
 
 Resource packs never define authoritative collision, selection/reach shapes, light values used by simulation, block/entity state, movement, hit timing, inventory events, or root motion. Those belong to server-visible data/registries. A model or animation can react to replicated presentation facts; it cannot create those facts.
 
 ## Context and constraints
 
 - Static block geometry must be suitable for section meshing and batching; a Godot node or draw call per block is outside the accepted client architecture.
-- Entities and stateful/animated block entities need arbitrary geometry, bones, sockets, skins, morphs, reusable clips, and deterministic playback state.
-- Materials need stable texture slots so a texture/material overlay does not require editing a GLB.
+- Entities and stateful/animated block entities need arbitrary geometry, bones, sockets,
+  reusable first-party clips, and deterministic playback state.
+- Materials need stable texture slots so a texture/material overlay does not require
+  editing a model payload.
 - The visual contract should support 64×64 and larger textures without assuming “one pixel equals one light sample.” GPU fragment shading is separate from world-light storage.
 - Transparent, emissive, reflective, and refractive goals depend on `RENDER-06`. The asset schema may expose only capabilities with implemented, tested renderer semantics.
 - The client is Godot/C#, but packs must not contain Godot scenes/resources or rely on editor import metadata.
@@ -31,9 +46,9 @@ Resource packs never define authoritative collision, selection/reach shapes, lig
 | --- | --- | --- | --- |
 | Minecraft Java/Bedrock model JSON natively | Familiar voxel tooling; cuboid/blockstate precedent | Two different evolving formats; weak material model; edition quirks and extension debt | Converter input only |
 | Godot `.tscn/.tres`, `AnimationPlayer`, and `AnimationTree` as pack format | Direct engine integration and rich features | Engine-version coupling; project-path replacement; arbitrary node/property/method tracks; poor headless validation/isolation | Rejected as portable/untrusted contract |
-| glTF/GLB for every semantic | Industry tooling; meshes, skins, morphs, PBR, keyframes | No block-state rules, culling contract, playback graph, unique-name guarantee, collision authority, or package references | Use as geometry/clip payload, not whole contract |
+| glTF/GLB for every semantic | Industry tooling; meshes, skins, morphs, PBR, keyframes | Does not meet the desired native voxel/rig contract; import/validation surface is larger than wanted | Offline authoring candidate only |
 | Custom JSON geometry and animation for everything | Exact voxel semantics and easy parsing | Rebuilds DCC ecosystem, skinning, morph, tangent, interpolation, and exporter tooling | Use only for compact cuboid blocks/controllers |
-| **VibeCraft descriptors + cuboids + constrained GLB + compiled runtime forms** | Explicit voxel/application semantics with standard arbitrary geometry | Importer/compiler and schema tooling required | **Recommended** |
+| **VibeCraft descriptors + cuboids + rig profiles + format spike** | Explicit voxel/application semantics and reusable built-in animation | Requires a focused source-format/tooling decision | **Owner direction** |
 
 ## Evidence
 
@@ -93,13 +108,18 @@ VibeCraft world/model convention:
 - right-handed coordinates;
 - +X east, +Y up, +Z south;
 - entity/model forward is -Z (north);
-- one world unit and one glTF meter equal one full block edge;
+- one VibeCraft model unit equals one full block edge;
 - block-local bounds are normally `[0, 1]` on each axis, with block center `(0.5, 0.5, 0.5)`;
 - UV origin and tangent/color-space handling are defined by each texture/material schema, not inferred from authoring software.
 
-Core glTF declares +Z as asset front. The VibeCraft GLB importer applies one documented 180-degree +Y root-basis conversion so imported model forward becomes VibeCraft -Z. Exporter fixtures must verify this with asymmetric labeled axes; authors do not compensate by rotating individual bones.
+The selected source-format adapter must document any authoring-basis conversion and
+verify it with asymmetric labeled-axis fixtures. Packs never compensate by applying
+ad-hoc per-bone rotations.
 
-Asset references use typed `namespace:path` names from `ASSET-01`. JSON enum/slot/node/clip/controller names use lowercase ASCII `[a-z0-9_]+`, 1–64 characters. Any glTF node, material slot, animation, or socket referenced by name must have a non-empty name unique in the relevant GLB; duplicates are an import error even though core glTF permits them.
+Asset references use typed `namespace:path` names from `ASSET-01`. JSON enum/slot,
+rig-joint, clip, and controller names use lowercase ASCII `[a-z0-9_]+`, 1–64
+characters. Every source format accepted by the future spike must reject ambiguous
+referenced names before compilation.
 
 ### Asset graph
 
@@ -107,16 +127,40 @@ Asset references use typed `namespace:path` names from `ASSET-01`. JSON enum/slo
 Block registry state (authoritative data; GAME-01)
     -> block_visual
          -> one or more model descriptors
-              -> cuboid elements OR geometry GLB
+              -> cuboid elements OR format-spike model payload
               -> material slot bindings -> material -> textures
 
 Entity/block-entity presentation type
     -> entity_visual
-         -> model descriptor -> geometry/materials/sockets/clips
-         -> animation_graph -> named model clips + typed presentation inputs
+         -> model descriptor -> geometry/materials/sockets/RigProfile
+         -> presentation graph -> profile clip IDs + typed presentation inputs
 ```
 
 Descriptors never use host-relative paths. Every cross-file reference is an `AssetName` in a typed field and resolves through one staged `ASSET-02` snapshot. The compiler detects missing references and graph cycles and records the effective package/path origin of every edge.
+
+### Rig profiles and reusable built-in animation
+
+VibeCraft does not promise Minecraft-compatible skeletons. It publishes named,
+versioned first-party rig profiles such as `vibecraft:biped/1` and
+`vibecraft:quadruped/1`. A profile declares required joint IDs, parent hierarchy,
+bind-pose/orientation conventions, named sockets, and the built-in clip catalog that
+the client may apply.
+
+```text
+RigProfile
+  id + revision
+  required_joints[] { id, parent, bind-pose convention }
+  optional_sockets[]
+  built_in_clips[] { id, semantic meaning, loop/one-shot policy }
+```
+
+An entity or animated block-entity model declares one profile and provides every
+required joint. A compatible replacement can therefore reuse VibeCraft's idle, walk,
+hurt, open, and similar profile clips without needing any Minecraft bone names. A
+model that does not meet its declared profile fails validation; it does not silently
+retarget or invent joints. User-authored skeletal clips, arbitrary retargeting, and
+custom animation graphs are deferred until two first-party profiles prove what the
+public contract actually needs.
 
 ### Model descriptor
 
@@ -182,7 +226,12 @@ Rules:
 - `chunk_static` geometry, after block-visual rotation, must remain inside `[0,1]^3`, have no skin/morph/clip, and compile to immutable vertices grouped by renderer layer/material-atlas class.
 - Cuboid source is preferred for ordinary cubes, slabs, stairs, crossed plants, fences, panes, dust, and similar models because it preserves explicit face/culling structure and converts cleanly from Java-style models.
 
-#### GLB-backed model
+#### Historical GLB-backed candidate — not a public-pack contract
+
+The following GLB profile is retained only as research for a possible offline authoring
+converter. It is **not** VibeCraft v1 format selection, is not required of pack
+authors, and must not be used to implement the runtime loader until a future owner
+decision explicitly reopens it.
 
 ```json
 {
@@ -208,7 +257,7 @@ Rules:
 }
 ```
 
-V1 GLB profile:
+Former proposed GLB profile:
 
 - GLB 2.0 only, exactly one embedded BIN payload; textual `.gltf`, external/data/file/http URIs, embedded/external images, cameras, lights, audio, scripts, and unknown required extensions are rejected.
 - Initial supported core data: triangle primitives, indexed or non-indexed positions, normals, tangents, `TEXCOORD_0`, `COLOR_0`, one skin with up to four normalized influences per vertex, and node TRS animation with `STEP` or `LINEAR`. `CUBICSPLINE`, morph targets/weights, sparse accessors, matrices outside the accepted TRS profile, and each optional extension are rejected until their own conformance/budget fixtures pass and the asset API capability is revised.
@@ -308,14 +357,18 @@ The compiler flattens every valid state to a `BlockRenderTemplate` before chunk 
 
 ### Entity and animated block-entity visual
 
-A `.entity-visual.json` binds a model and animation graph to one presentation type:
+A future `.entity-visual.json` binds a profile-compatible model and presentation graph
+to one presentation type. For the first profile slice, packs may replace compatible
+geometry/material bindings but select only the profile's built-in clip IDs; they do not
+ship arbitrary skeletal clips or a custom graph.
 
 ```json
 {
   "schema": "vibecraft.entity_visual/1",
   "presentation_type": "example:boar",
   "model": "example:entity/boar",
-  "animation_graph": "example:entity/boar",
+  "rig_profile": "vibecraft:quadruped/1",
+  "clip_set": "built_in",
   "parameters": {
     "speed": "locomotion.horizontal_speed",
     "grounded": "locomotion.grounded",
@@ -329,9 +382,12 @@ The engine publishes a versioned catalog of typed read-only presentation inputs.
 
 Animated chests/doors that are ordinary authoritative blocks use a sparse block-entity presentation instance driven by replicated open/progress state. Dense, purely periodic visual effects should remain chunk/material animation where possible.
 
-### Animation graph
+### Presentation graph — deferred public authoring
 
-glTF stores clips. A `.animgraph.json` defines bounded playback semantics:
+The selected future model format may store clips, but public clip/graph authoring is
+deferred. The retained graph below is a bounded future design sketch for first-party
+use; it is not a v1 pack requirement. V1 maps replicated presentation facts to the
+fixed clip catalog of the declared `RigProfile`.
 
 ```json
 {
@@ -399,8 +455,8 @@ In addition to `ASSET-01` archive/parser limits, v1 defaults are:
 | --- | ---: |
 | Cuboid elements in one model | 256 |
 | Emitted faces in one cuboid model | 1,536 |
-| GLB nodes / primitives | 2,048 / 2,048 |
-| Vertices / triangles in one GLB | 1,000,000 / 2,000,000 |
+| Nodes / primitives in one future model payload | 2,048 / 2,048 |
+| Vertices / triangles in one future model payload | 1,000,000 / 2,000,000 |
 | Joints per skin / influences per vertex | 256 / 4 |
 | Morph targets per primitive | 8 |
 | Named clips / total animation key values | 128 / 1,000,000 |
@@ -409,7 +465,9 @@ In addition to `ASSET-01` archive/parser limits, v1 defaults are:
 | Animation states / transitions / condition depth | 128 / 512 / 16 |
 | Marker events in one graph | 4,096 |
 
-All counts and byte products use checked arithmetic before allocation. Float values must be finite; quaternions, accessors, indices, animation times, and dimensions are validated. Animation input times must be non-negative and strictly increasing as required by the glTF profile. Images/URIs and extension payloads rejected by the profile are not passed to Godot.
+All counts and byte products use checked arithmetic before allocation. Float values,
+quaternions, indices, animation times, and dimensions must be finite/valid under the
+eventual selected format. No source payload is passed directly to Godot.
 
 The asset compiler also enforces aggregate profile budgets and emits cost estimates:
 
@@ -456,7 +514,7 @@ Compilation order:
 ```text
 parse strict descriptors
   -> resolve final asset graph and origins
-  -> validate cuboids/GLB/materials/graphs against capabilities and budgets
+  -> validate cuboids/future model payloads/materials/graphs against capabilities and budgets
   -> flatten block states and compile CPU render/animation tables
   -> cache by source/effective snapshot digests
   -> publish Godot textures/meshes/materials/animation backend objects
@@ -472,21 +530,28 @@ The `ASSET-02` offline converter translates rather than embeds semantics:
 - Java cuboid elements and face UV/cull data become native cuboid models after unit/axis conversion.
 - Java blockstate variants/multipart rules are expanded against the VibeCraft block registry mapping and compiled into unambiguous native cases/parts. Parent chains are resolved during conversion; native runtime models do not open Minecraft parents.
 - Java textures/material metadata map only to supported native textures/materials. Core shaders and third-party conventions are reported unsupported unless a separately versioned converter plugin explicitly owns them.
-- Bedrock bones/cubes/locators/keyframes can become GLB geometry/clips plus socket/clip aliases. Molang/render-controller expressions map only when every query has a typed VibeCraft presentation input and equivalent semantics; otherwise the report names the expression/feature.
+- Bedrock bones/cubes/locators/keyframes are unsupported until the selected native
+  model/rig format has a converter. A report names them rather than pretending to
+  preserve animation semantics. Molang/render-controller expressions remain unsupported
+  unless a later converter owns equivalent typed presentation inputs.
 - Minecraft collision/selection/behavior definitions never enter a resource pack as authority. If a future content/data converter maps gameplay, it emits a separately reviewed server-visible package.
 
 Converted output is subjected to the same unique-name, bounds, material-slot, state-coverage, capability, and cost validation as hand-authored native content. No runtime code branches on source provenance.
 
 ## Greenlight criteria
 
-- Blender-exported asymmetric GLB fixtures face the documented direction and preserve meter/block scale, skeleton rest pose, named clips, sockets, UVs, tangents, and the accepted `STEP`/`LINEAR` modes identically in the content tool and supported Godot backend.
+- The selected model/rig format spike produces deterministic cross-platform fixtures
+  for direction, block scale, profile bind pose, required joints, sockets, and built-in
+  clip binding without relying on Godot import products.
 - The importer rejects external/data/network/file URIs, images, duplicate referenced names, unsupported required extensions, invalid floats/accessors, over-limit graphs/geometry, and missing material slots before Godot/GPU publication.
 - Every valid block registry state compiles to exactly one base template plus deterministic multipart additions; invalid properties, overlapping cases, missing fallback coverage, and nondeterministic weighted choices fail tests.
 - Full-cube/slab/stair/cross-plant/fence fixtures produce correct neighbor culling and no holes; falsified `cull_against` assertions are rejected.
 - Changing only a render model/resource pack cannot change server collision, selection/reach, block state, light used by simulation, movement, damage, item timing, or save/network schema.
 - Animation transitions, interrupts, looping, completion, marker deduplication, snapshot replacement, and root-motion ignore behavior have golden deterministic tests independent of Godot frame rate.
 - The backend can render one representative section containing all static block templates without per-block Godot nodes and can animate 1,000 representative simple entity instances at 60 Hz within a measured 2 ms animation-update CPU budget on the eventual minimum-spec desktop; failure means simplify/batch the graph backend, not weaken authority boundaries.
-- Java and Bedrock converter fixtures generate only these native descriptors/GLBs and produce explicit unsupported-feature reports; the runtime result is independent of Minecraft source edition.
+- Java and Bedrock converter fixtures generate only supported native descriptors and
+  produce explicit unsupported-feature reports; the runtime result is independent of
+  Minecraft source edition.
 
 ## Prototype or benchmark
 
@@ -496,9 +561,12 @@ Smallest useful experiment:
 
 1. Author cube, slab, stair, fence, crossed plant, chest, and skinned quadruped fixtures.
 2. Compile cuboids into section mesh templates with face culling and render all block-state rotations.
-3. Export chest/quadruped as GLB from Blender with sockets, `STEP`/`LINEAR` clips and four material slots; include `CUBICSPLINE` and morph fixtures in the rejection/capability-gate corpus.
-4. Drive idle/walk/hurt and chest open/close through the constrained graph from synthetic presentation snapshots.
-5. Feed adversarial GLBs/descriptors from the Khronos validator corpus plus VibeCraft-specific over-limit/URI/name/reference cases.
+3. Run a focused model/rig spike comparing a purpose-built voxel-oriented source format
+   with offline import/conversion candidates; require a profile-compatible chest and
+   quadruped fixture, sockets, and built-in idle/walk/hurt/open clip binding.
+4. Drive profile clip selection from synthetic presentation snapshots.
+5. Feed adversarial model payloads/descriptors from the selected format's corpus plus
+   VibeCraft-specific over-limit/name/reference cases.
 6. Convert one Java cuboid/blockstate pack and one Bedrock bone/controller pack with deliberate unsupported constructs.
 
 Success metrics:
@@ -513,9 +581,13 @@ Success metrics:
 ## Risks and open questions
 
 - `RENDER-06` may require changes to material grouping/atlas eligibility before transmission/refraction can be exposed. Those features are not pre-approved by this schema.
-- Full arbitrary GLB blocks in dense terrain can inflate section vertices and defeat culling/atlasing. V1 should ship cuboid-first authoring guidance and explicit compiler cost warnings.
+- Full arbitrary model payloads in dense terrain can inflate section vertices and
+  defeat culling/atlasing. V1 should ship cuboid-first authoring guidance and explicit
+  compiler cost warnings.
 - 1,000 animated scene-node rigs may not meet budget; the contract permits a later batched/skinning backend because packs do not serialize Godot nodes.
-- Animation retargeting and a standard humanoid skeleton would improve reuse but would create a substantial public authoring ABI. Defer until two real first-party rigs demonstrate requirements.
+- Rig retargeting and additional profile families would improve reuse but create a
+  substantial public authoring ABI. Defer them until two real first-party profiles
+  demonstrate requirements.
 - Resource-only hot reload can change model bounds enough to cause visual popping, but must never alter prediction/server collision. Debug UI should expose both shapes when diagnosing mismatches.
 - Texture animation/procedural generation, localization/font shaping, and audio event semantics need their own decisions.
 
@@ -530,7 +602,8 @@ Success metrics:
 - Godot scenes/resources, shader code, method tracks, and arbitrary property paths in untrusted packs: rejected.
 - Client resource models defining authoritative collision or root motion: rejected.
 - General-purpose expression language/Molang compatibility in native animation graphs: rejected.
-- Silently ignoring unknown glTF extensions or material features: rejected.
+- Treating GLB/glTF as the native public-pack format: rejected pending a future owner
+  decision; any offline importer must reject unsupported source features explicitly.
 - Per-block animated/dynamic Godot instances for ordinary terrain: rejected.
 - Generic model inheritance and JSON merge across packages: rejected for v1; conversion resolves source inheritance.
 - Additive layers, IK, retargeting, procedural bone scripts, and advanced cinematic timelines: deferred until measured requirements exist.

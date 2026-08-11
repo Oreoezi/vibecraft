@@ -4,9 +4,21 @@ Status: Proposed
 
 ## Decision
 
-Recommended choice: Make `ASSET-03` the sole normative geometry/clip/animation-graph contract. Retain this brief only for texture-animation runtime semantics and the general separation of clip data, presentation selection, and authoritative gameplay timing; its earlier glTF subset, marker, missing-clip, and material clauses are superseded by `ASSET-03`.
+Recommended choice: Make `ASSET-03` the sole owner of the future model/rig and
+presentation contract. Retain this brief for texture-animation runtime semantics and
+the separation of profile clip selection, presentation state, and authoritative
+gameplay timing; its earlier glTF subset, marker, missing-clip, and material clauses
+are historical research, not a selected format.
 
-One-sentence rationale: Keyframe samples, presentation state selection, texture animation, and authoritative gameplay timing are different problems, but two competing GLB profiles would be worse than one strict compiled contract.
+One-sentence rationale: Presentation state selection, texture animation, and
+authoritative gameplay timing are different problems, and neither should force a
+premature public model-source format.
+
+### Owner decision — 2026-08-10
+
+V1 model replacements reuse built-in `RigProfile` clips from `ASSET-03`; user-authored
+skeletal clips/graphs are deferred. GLB/glTF remains possible offline research input,
+not the native pack contract.
 
 ## Context and constraints
 
@@ -21,9 +33,9 @@ One-sentence rationale: Keyframe samples, presentation state selection, texture 
 | Option | Strengths | Costs/risks | Fit |
 | --- | --- | --- | --- |
 | Store Godot scenes/AnimationPlayer resources | Native playback/editor tooling | Engine-version coupling; unsafe/unfriendly external pack boundary | Reject as pack format |
-| Invent complete model/skeleton/keyframe format | Exact control | Large tooling/import/validation burden | Reject for v1 |
-| Load glTF directly at runtime | Standard tooling and semantics | Parse/import cost, extension variability, runtime error surface | Good authoring input, not final cache |
-| Validate/compile glTF into a native runtime cache | Standard authoring plus controlled runtime | Requires pack compiler | Recommended |
+| Define a VibeCraft voxel model/rig source format now | Exact control | Large tooling/import/validation burden | Bounded format spike required before selection |
+| Load glTF directly at runtime | Standard tooling and semantics | Parse/import cost, extension variability, runtime error surface | Historical authoring candidate only |
+| Validate/compile glTF into a native runtime cache | Standard authoring plus controlled runtime | Requires pack compiler | Candidate only; no native source format is selected |
 
 ## Evidence
 
@@ -41,16 +53,15 @@ Godot imports glTF scenes and can import animations as an `AnimationLibrary` ([G
 
 The presentation graph may anticipate an action locally and reconcile to server events, but clip frames never determine damage, reach, invulnerability, item consumption, or block mutation.
 
-### Import pipeline
+### Historical glTF candidate: import pipeline
 
-This first-wave subsection is superseded by `ASSET-03`. V1 accepts GLB only, one embedded BIN, no URIs/images, material names as slot labels only, `STEP`/`LINEAR` TRS animation initially, and no morphs/CUBICSPLINE until capability-gated fixtures pass. Original package GLB is compiled into owned plain tables and is never handed to broad Godot scene generation.
+This first-wave subsection is historical research only. `ASSET-03` now requires a
+format/tooling spike before any model source is accepted. No original package model
+payload may be handed to broad Godot scene generation.
 
-Accepted source for v1:
-
-- `.glb` only; textual `.gltf` and every URI are rejected;
-- glTF core 2.0 plus an allowlist of explicitly supported extensions;
-- node hierarchy, mesh primitives, skinning, named clips, and step/linear animation required;
-- cubic splines, morph targets, and material extensions are rejected in the initial profile and require explicit future capability gates rather than silent approximation.
+No GLB/glTF source form is accepted as a public pack requirement before the format
+spike selects a native contract. Any optional offline importer must have a strict
+allowlist, bounded compilation, explicit diagnostics, and no broad Godot import.
 
 The pack compiler validates sizes/counts, hierarchy cycles, finite values, normalized rotations, skin/joint limits, key ordering, clip duration, texture references, and path containment. It converts coordinates/material bindings and emits a cache keyed by source hashes, importer version, target renderer profile, and asset-contract version.
 
@@ -111,9 +122,10 @@ Doors, chests, and other articulated blocks use named parts and clips but are in
 
 ## Greenlight criteria
 
-- The same source GLB compiles deterministically on all supported build platforms.
+- The selected model/rig source compiles deterministically on all supported build
+  platforms.
 - Runtime loading performs no external URI/network access and instantiates no arbitrary Godot scene/script.
-- Unsupported glTF extensions fail with explicit diagnostics.
+- Unsupported model-source features fail with explicit diagnostics.
 - Gameplay results are identical when clips, playback speed, or presentation graph are changed.
 - Texture animations do not trigger section remeshing and remain batchable.
 - Missing required clips fail compilation with an asset-origin diagnostic; any future fallback is schema-defined by `ASSET-03`.
@@ -129,7 +141,8 @@ Measure import time, cache size, per-instance animation CPU, skinning/draw cost,
 ## Risks and open questions
 
 - Runtime skinning strategy and crowd batching depend on actual entity counts.
-- `ASSET-03` ignores GLB PBR values and binds unique slot labels to VibeCraft materials; this brief must not reintroduce approximation behavior.
+- `ASSET-03` owns profile/model material-slot mapping; this brief must not reintroduce
+  an implicit shader or source-format approximation path.
 - User-authored state graphs can become combinatorially complex even without scripting; visualization/debug tooling is important later.
 
 ## Dependencies

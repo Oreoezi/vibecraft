@@ -8,6 +8,13 @@ Recommended choice: Use a hybrid data-oriented model—palette-compressed sectio
 
 One-sentence rationale: Voxels, chests, dropped items, mobs, and global rules have different density and lifecycle patterns; one universal object or ECS representation would make at least one of them inefficient or awkward.
 
+### Owner decision — 2026-08-10
+
+Block entities are sparse and activation-driven. Merely loading a section or placing
+many chests must not cause all of them to run work: a block entity wakes only from an
+explicit interaction/event, a due schedule, relevant player interest, or a bounded
+background policy. The exact activation table remains a `WORLD-08` benchmark gate.
+
 ## Context and constraints
 
 - Terrain contains millions of mostly passive blocks.
@@ -59,6 +66,13 @@ BlockEntityRecord {
 ```
 
 The owning block state declares whether a block entity is legal. Placement/removal transitions create or remove the record transactionally. Orphan/mismatched records are quarantined or migrated during load, never silently attached to the wrong block.
+
+Each block-entity type declares its activation triggers and maximum work class. Loaded
+but idle records retain durable state without polling; opening a chest, a scheduled
+furnace update, an adjacent block event, or a relevant observer can enqueue bounded
+work for its owner. The scheduler coalesces duplicate wake-ups and exposes backlog
+metrics, so dense storage builds cannot turn potential interactivity into constant CPU
+cost.
 
 ### Dynamic entities
 

@@ -8,11 +8,21 @@ Related spec: [`../../design_doc.md`](../../design_doc.md)
 
 ## Decision
 
-Recommended choice: Keep one host-agnostic `ServerCore` and prototype two adapters: a supervised child process using loopback gameplay transport, and an embedded host fallback using the same typed protocol semantics. The child is the leading desktop candidate, not a shipping decision, until packaging, startup, pause/save, orphan cleanup, native transport, and target-platform tests pass.
+Recommended choice: Keep one host-agnostic `ServerCore` and ship desktop
+singleplayer through a supervised child process using loopback gameplay transport. An
+embedded host remains a conformance/fallback adapter using the same typed protocol
+semantics, not a competing product topology. The child still must pass packaging,
+startup, pause/save, orphan cleanup, native transport, and target-platform tests.
 
-One-sentence rationale: The semantic boundary provides dedicated-server parity; measuring both hosts determines whether child-process fault isolation is worth its packaging, startup, memory, and native-library costs on the actual target platforms.
+One-sentence rationale: The semantic boundary provides dedicated-server parity; the selected child host must demonstrate that its fault-isolation benefit justifies its packaging, startup, memory, and native-library costs on the actual target platforms.
 
 The local process is **private singleplayer**, not an implicit listen/LAN server. Hosting other players is a later, explicit session mode with remote-server pause and authentication rules.
+
+### Owner decision — 2026-08-10
+
+The owner selected option **C** for Windows x64 and Linux x64. Singleplayer uses the
+same authoritative server path as multiplayer; its meaningful product difference is
+that the local supervisor may request a pause at an authoritative tick boundary.
 
 ## Context and constraints
 
@@ -31,7 +41,7 @@ The local process is **private singleplayer**, not an implicit listen/LAN server
 | --- | --- | --- | --- |
 | A. Special singleplayer simulation with no server | Fast startup, simplest debugger | Guaranteed rules/mod/save drift; contradicts the architecture goal | Rejected |
 | B. Server library in the Godot process, separate thread, in-memory or loopback transport | Low memory and startup cost; easy sharing/debugging; used successfully by voxel engines | A server fault or unsafe plugin can kill/corrupt the client process; shutdown deadlocks share one runtime; in-memory transport can hide real-network bugs | **Prototype as fallback/counterfactual** |
-| **C. Supervised child server + loopback gameplay transport** | Process isolation, real transport behavior, independent logs/exit status, explicit save barrier | Extra runtime memory; packaging and child supervision; localhost socket/security details | **Leading candidate; prototype-gated** |
+| **C. Supervised child server + loopback gameplay transport** | Process isolation, real transport behavior, independent logs/exit status, explicit save barrier | Extra runtime memory; packaging and child supervision; localhost socket/security details | **Selected Windows/Linux desktop direction; acceptance-gated** |
 | D. Ask player to launch a dedicated server manually | Maximum operational separation | Bad singleplayer UX; lifecycle and auth burden exposed to player | Rejected for singleplayer; retained as dedicated mode |
 | E. Child server + bespoke local gameplay IPC | Process isolation without UDP overhead/firewall behavior | Two transport implementations and different packet behavior; local-only bugs | Rejected; a control pipe is allowed, gameplay IPC is not |
 
@@ -99,7 +109,9 @@ VibeCraft engineering inference:
 
 ## Proposed design
 
-The detailed state machine below is the **child-process candidate**. The same `ServerCore` must also be hosted by a minimal embedded adapter in the prototype so topology is selected from measured packaging, lifecycle, memory, and failure behavior rather than assumed from this sketch.
+The detailed state machine below is the selected child-process topology. The same
+`ServerCore` must also be hostable by a minimal embedded adapter for conformance and
+fallback testing, but that comparison does not reopen the desktop product decision.
 
 ### Components and ownership
 
@@ -360,7 +372,11 @@ Success metrics:
 - `ARCH-05` gives server plugins bounded shutdown behavior.
 - Packaging proves the selected host adapter and runtime are included and launchable in exported Godot builds on every declared target platform.
 - Product accepts that LAN hosting is separate from private singleplayer and declares the first supported host platforms.
-- The child and embedded adapters produce equivalent authority/protocol traces. Select the child only if export, startup, memory, pause/save, crash, orphan, and native-library gates pass; otherwise ship the embedded adapter without changing `ServerCore`.
+- The child and embedded adapters produce equivalent authority/protocol traces. The
+  child must pass export, startup, memory, pause/save, crash, orphan, and native-
+  library gates for supported desktop platforms; a failure blocks that platform or
+  explicitly promotes the already-conformant fallback rather than creating different
+  gameplay semantics.
 
 ## Risks and open questions
 
@@ -383,7 +399,7 @@ Success metrics:
 ## Rejected or deferred alternatives
 
 - **Direct singleplayer world mutation by the client:** rejected; it defeats every parity and authority goal.
-- **Selecting either child or embedded host without a comparison:** rejected. The child is the leading desktop hypothesis; the embedded host is the required fallback/counterfactual.
+- **Changing the selected child desktop topology without its acceptance evidence:** rejected. The embedded host remains the required conformance/fallback counterfactual, not a competing product topology.
 - **In-memory gameplay transport for local play:** rejected for v1. It hides packetization/loss/order behavior and doubles the transport surface. A test-only in-memory adapter is acceptable for unit tests.
 - **Fixed local UDP port:** rejected; it creates collision and stale-process failure modes. Bind port zero and communicate the selected endpoint through `Ready`.
 - **Parsing logs for “server started”:** rejected; readiness is a versioned machine event.

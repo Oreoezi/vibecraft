@@ -103,7 +103,7 @@ Owners: [ARCH-03](../decisions/ARCH-03-godot-client-boundary.md), [RENDER-01](..
 - **SHOULD:** Protobuf may be used for low-frequency structured messages. Hot snapshots and chunk payloads may use other versioned encodings if measurement shows a material benefit.
 - **MUST:** Transport selection remains open until packaged target-platform tests cover native ownership, congestion, lane behavior, connection churn, trust, and admission. GameNetworkingSockets/reliable UDP and QUIC streams plus datagrams are candidates; no candidate's marketing claims are VibeCraft guarantees.
 - **MUST:** The same host-agnostic `ServerCore`, authority rules, action handlers, and persistence path serve dedicated multiplayer and singleplayer.
-- **MUST:** Supervised child-process loopback and embedded hosting remain candidates until startup, memory, packaging, signing, pause/save, crash isolation, orphan cleanup, and protocol-trace equivalence are compared on supported platforms.
+- **MUST:** Windows x64 and Linux x64 are the first supported platforms. Supervised child-process loopback is the selected desktop singleplayer topology; it must still pass startup, memory, packaging, pause/save, crash isolation, orphan cleanup, and protocol-trace gates. An embedded adapter remains a test/fallback implementation, not a second product mode.
 - **MUST:** First-playable public exposure is private/invite-only unless authenticated server identity, authenticated player sessions, pre-auth admission bounds, and operator/upstream responsibilities pass their gates.
 - **MAY:** LAN hosting is a later explicit mode. It must not be created by silently rebinding a private singleplayer process.
 
@@ -115,10 +115,10 @@ Owners: [ARCH-04](../decisions/ARCH-04-singleplayer-server-lifecycle.md), [NET-0
 - **MUST:** Resource-pack paths are canonical, namespaced, traversal-safe, case-policy-defined, and read through a VibeCraft-owned read-only boundary. Archive count, path, compressed, decoded, parser-work, and output sizes are bounded before publication.
 - **MUST:** The source package is authoritative; platform/GPU/Godot-specific compiled products are disposable private caches and never package identity.
 - **MUST:** Logical-content digest, literal artifact digest/length, resolved lock digest, and compiled-cache key are distinct concepts with one normative encoding each.
-- **MUST:** The first playable needs only one minimal first-party `.vcpak`. General dependency solving, foreign-package overrides, conversion, GLB rigs, and hot reload do not block it.
+- **MUST:** The first playable needs only one minimal first-party `.vcpak`. Later resource packs use an explicit user-selected low-to-high stack and whole-asset replacement; they have no package dependency DAG, automatic download, or deep-merge semantics. Conversion, rigged models, and hot reload do not block it.
 - **SHOULD:** Later resolution selects one immutable version per `(artifact kind, package ID)` and produces an exact deterministic lock. Resource overrides are explicit, whole-asset, and resource-to-resource only.
 - **MUST:** Visual assets cannot define authoritative collision, reach, movement, light rules, damage, inventory outcomes, or root motion.
-- **MAY:** Later asset support can add constrained VibeCraft descriptors, cuboid block models, validated GLB-derived geometry/animation, and build-time procedural outputs. Original untrusted artifacts must not gain broad Godot import or execution authority.
+- **MAY:** Later asset support can add constrained VibeCraft descriptors, cuboid block models, profile-compatible rigged geometry, and build-time procedural outputs. The engine-neutral native model/rig format remains a format spike; GLB/glTF is not the public pack contract. Original untrusted artifacts must not gain broad Godot import or execution authority.
 
 Artifact taxonomy:
 
@@ -126,8 +126,8 @@ Artifact taxonomy:
 | --- | --- | --- |
 | `.vcpak` + `pack.json` | First playable | Resource-only; untrusted parser input but never executable |
 | Future data pack | Survival or later | Declarative authoritative content under server validation; separate schema/parser |
-| `.vcmod` + `mod.json` | Post-prototype | Standard sandbox component only; no native or precompiled runtime cache |
-| Native plugin directory + native manifest | Optional later tier | Fully trusted local/operator code; never server-downloaded as a safe requirement |
+| `.vcmod` + `mod.json` | Post-prototype | One selected public sandbox runtime; Wasm component and constrained Lua-family hosts remain candidates; no native or precompiled runtime cache |
+| Private native fork | Outside supported ecosystem | Fully trusted local/operator code; no supported manifest, resolver, compatibility promise, or server-download path |
 
 Owners: [ASSET-01](../decisions/ASSET-01-packaging-and-namespaces.md), [ASSET-02](../decisions/ASSET-02-manifest-and-overrides.md), [ASSET-03](../decisions/ASSET-03-model-and-animation-contract.md), [ASSET-04](../decisions/ASSET-04-animation-runtime.md), [ASSET-05](../decisions/ASSET-05-procedural-assets.md), [NET-09](../decisions/NET-09-client-content-agreement.md).
 
@@ -150,15 +150,15 @@ Owners: [GAME-01](../decisions/GAME-01-content-registries.md), [GAME-02](../deci
 
 ## Modding and security requirements
 
-- **MUST:** Documentation, manifests, installation UI, logs, and server policy distinguish inert resources, declarative gameplay data, sandboxed executable components, and trusted native plugins.
-- **MUST:** Native .NET extensions are labeled unrestricted, full-process-trust code. `AssemblyLoadContext`, analyzers, or permission declarations are not a sandbox.
+- **MUST:** Documentation, manifests, installation UI, logs, and server policy distinguish inert resources, declarative gameplay data, and the one sandboxed executable-component ecosystem. Private native forks are outside those supported paths.
+- **MUST:** Native .NET code remains unrestricted, full-process-trust code. `AssemblyLoadContext`, analyzers, or permission declarations are not a sandbox, and native code does not form a public extension tier.
 - **MUST:** A claim of “sandboxed” or “scoped permissions” is made only for a runtime that passes hostile validation, compilation, cache, import, capability, quota, handle-lifetime, transaction, disable, and supported-platform tests.
 - **SHOULD:** Sandboxed executable mods use deny-by-default capabilities, immutable views, validated commands, host-owned scheduling, bounded output, and no ambient filesystem, network, process, native-library, Godot-object, or engine-object access.
 - **MUST:** Sandboxed module storage belongs to an approved artifact/component/update lineage and authenticated server identity where relevant, not merely a reusable package name.
 - **MUST:** Client content locks are compatibility and local-integrity checks for cooperating clients. They do not attest possession, execution, absence of extra code, an unmodified client, or honest permission enforcement.
 - **MUST:** Server authority remains the anti-illegal-state boundary even when all clients report matching content.
 - **SHOULD:** At least two first-party features must survive a real internal refactor through the proposed extension surface before any ABI is called stable.
-- **MAY:** Wasm components are the leading sandbox candidate, but the runtime/host binding is not selected until it enforces all required limits on each supported platform. Native plugins remain a separate opt-in tier regardless of that result.
+- **MAY:** A sandbox runtime is needed for the one public extension ecosystem, but its language/runtime binding is not selected until it enforces required limits on every supported platform. Native in-process extensions belong to private forks or explicitly unsupported operator deployments and never form a parallel public-plugin ecosystem.
 
 Owners: [MOD-01](../decisions/MOD-01-client-mod-runtime.md), [MOD-02](../decisions/MOD-02-capability-security.md), [MOD-03](../decisions/MOD-03-extension-api-stability.md), [ARCH-05](../decisions/ARCH-05-server-plugin-boundary.md), [NET-09](../decisions/NET-09-client-content-agreement.md).
 

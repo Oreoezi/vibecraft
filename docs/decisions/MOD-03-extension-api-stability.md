@@ -36,11 +36,14 @@ Veloren's experimental WASM plugins communicate through events because the host 
 
 ## Proposed design
 
-### Three extension tiers
+### Public extension surface and private forks
 
 1. `data_pack`: future declarative blocks, items, recipes, loot, tags, biomes, structures, and configured behaviors under its own parser. Preferred whenever sufficient. Visual resources remain separate `.vcpak` artifacts.
-2. `sandbox_component`: `.vcmod` capability-limited executable components for server/client logic. Portable ABI, metered execution, no ambient filesystem/network/process access after the sandbox gate passes.
-3. `native_plugin`: in-process .NET server/client plugins with full process authority and a distinct trusted installation path. Explicitly unsupported as a security boundary and allowed only by operator/user choice.
+2. `sandbox_component`: capability-limited executable components for server/client
+   logic, using the one runtime selected by the hostile sandbox gate. Portable API,
+   metered execution, and no ambient filesystem/network/process access are mandatory.
+3. Private native forks/patches: outside the VibeCraft public extension resolver and
+   ABI. They are not a supported compatibility tier or a remotely required artifact.
 
 The tiers may share namespaced identity/resolver vocabulary, but never an artifact parser, extension, or trust prompt. Tier does not imply gameplay authority: the server validates every client-originated command.
 

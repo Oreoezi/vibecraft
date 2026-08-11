@@ -168,6 +168,16 @@ public enum TickScheduleResult : byte
 - Random ticking visits active resident sections in canonical key order. The compatibility default is three attempts per nonempty 16-block-high section per world tick, configurable as `RandomTickSpeed`; `WORLD-01` maps its actual section geometry to deterministic 16-high sampling bands. Community Minecraft documentation is the available evidence for the default value, so it must be verified with gameplay tests rather than treated as a primary specification. ([community random-tick discussion](https://minecraft.wiki/w/Talk%3ATick))
 - Random choices use a counter-derived stream keyed by `(world seed, generator/registry compatibility ID, WorldTick, section key, attempt index)`. Adding a worker, entity, or unrelated random system cannot shift block-random outcomes.
 - Block entities tick in stable `(chunk key, local position)` order after scheduled/random block effects. Registration/removal commands are staged and apply at a phase boundary, so iteration is never modified in place.
+- Block entities are activation-driven: loaded idle records do not poll merely because
+  they exist. A type declares interaction/event, due-schedule, relevant-interest, or
+  bounded background activation triggers; duplicate wake-ups coalesce before the
+  stable iteration order is formed.
+- Gameplay-light propagation is a distinct bounded scheduled-work class. Block edits
+  enqueue coalesced invalidations keyed by target revision; each tick consumes a
+  deterministic cell/work budget and may promote churn to a bounded regional solve.
+  Light-dependent gameplay reads only the last committed authoritative revision while
+  debt is visible in diagnostics. This prevents piston/redstone spam from forcing an
+  unbounded synchronous light solve.
 - Entities tick only in `EntityTicking` chunks, in stable entity-ID order within deterministic system phases: player/control, physics, ordinary behavior/AI, item/projectile effects, and migration. Exact phase content is owned by gameplay documents, but changing it is a compatibility-version change.
 - Entity migration is committed after entity iteration. Destination capability is acquired before commit; otherwise the entity remains at the boundary or follows its type-specific failure rule. It never mutates two chunk entity stores concurrently.
 - VibeCraft v1 does not implement Paper-style per-entity “tick less often” heuristics. Whole-chunk activation is more predictable. Expensive AI sensing may later run on a stable modulo schedule if gameplay explicitly adopts that semantic.

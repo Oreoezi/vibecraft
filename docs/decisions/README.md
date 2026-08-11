@@ -1,6 +1,6 @@
 # Decision briefs
 
-All 40 planned topics are researched. Each brief remains `Proposed` until the owner greenlights its contract, experiment, deferral, or rejection. Start with [`../READ_ME_FIRST.md`](../READ_ME_FIRST.md), the [`../research/GREENLIGHT-CHECKLIST.md`](../research/GREENLIGHT-CHECKLIST.md), and the acyclic [`../research/DEPENDENCY-MAP.md`](../research/DEPENDENCY-MAP.md); do not implement these files in numeric order or treat every `Requires` edge as a hard prerequisite.
+All 40 planned topics are researched. Each brief remains `Proposed` until the owner greenlights its contract, experiment, deferral, or rejection. Start with [`../READ_ME_FIRST.md`](../READ_ME_FIRST.md), the owner-reviewed [`../OWNER_DECISIONS.md`](../OWNER_DECISIONS.md), the [`../research/GREENLIGHT-CHECKLIST.md`](../research/GREENLIGHT-CHECKLIST.md), and the acyclic [`../research/DEPENDENCY-MAP.md`](../research/DEPENDENCY-MAP.md); do not implement these files in numeric order or treat every `Requires` edge as a hard prerequisite.
 
 [`FOUNDATION-00`](FOUNDATION-00-spec-risk-audit.md) is the cross-cutting risk audit rather than one of the 40 topic IDs.
 
@@ -49,9 +49,9 @@ All 40 planned topics are researched. Each brief remains `Proposed` until the ow
 ## Assets
 
 - [`ASSET-01`](ASSET-01-packaging-and-namespaces.md) — resource packaging and namespaces
-- [`ASSET-02`](ASSET-02-manifest-and-overrides.md) — manifests, dependencies, overrides, and locks
-- [`ASSET-03`](ASSET-03-model-and-animation-contract.md) — normative models/materials/animation graph contract
-- [`ASSET-04`](ASSET-04-animation-runtime.md) — texture animation and runtime separation; GLB clauses superseded by ASSET-03
+- [`ASSET-02`](ASSET-02-manifest-and-overrides.md) — manifests, ordered whole-asset overlays, and locks
+- [`ASSET-03`](ASSET-03-model-and-animation-contract.md) — RigProfile compatibility and native model/rig format spike
+- [`ASSET-04`](ASSET-04-animation-runtime.md) — fixed profile clips and texture animation; user-authored clips deferred
 - [`ASSET-05`](ASSET-05-procedural-assets.md) — procedural authoring/runtime boundary
 
 ## Mods and plugins

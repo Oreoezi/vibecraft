@@ -7,8 +7,8 @@ Use each line as the `Research topic` in [`master.md`](master.md). Keep one topi
 - `ARCH-01` — Define the client/server authority model: server simulation, client prediction, and purely visual state.
 - `ARCH-02` — Compare ECS, object-oriented entities, data-oriented simulation, and hybrid models.
 - `ARCH-03` — Compare Godot scene nodes, custom rendering systems, MultiMesh-style rendering, and custom C# voxel subsystems.
-- `ARCH-04` — Design the singleplayer-through-server lifecycle: startup, shutdown, pause, saving, errors, and local transport.
-- `ARCH-05` — Design the dedicated-server plugin and scripting boundary without allowing plugins to corrupt state or block ticks.
+- `ARCH-04` — Validate the selected supervised child-server plus loopback lifecycle on Windows/Linux; retain an embedded adapter only for conformance/fallback.
+- `ARCH-05` — Design one public sandboxed extension boundary, brokered plugin storage, and tick-safe server scripting; do not create a parallel public native-plugin API.
 
 ## Networking
 
@@ -48,12 +48,12 @@ Use each line as the `Research topic` in [`master.md`](master.md). Keep one topi
 
 ## Assets and mods
 
-- `ASSET-01` — Compare namespaced files, glTF, custom binary packs, ZIP packages, and hybrid asset-pack formats.
-- `ASSET-02` — Design pack manifests, dependencies, overrides, namespaces, versions, validation, and Minecraft conversion.
-- `ASSET-03` — Design custom block/entity models, states, materials, collision shapes, and animation references.
-- `ASSET-04` — Compare keyframe animation formats and runtime systems for entities and block entities.
-- `ASSET-05` — Design procedural assets with deterministic noise, sandboxing, caching, invalidation, and limits.
-- `MOD-01` — Compare native C#, WebAssembly, sandboxed scripting, and data-driven client-mod architectures.
+- `ASSET-01` — Validate engine-agnostic ZIP resource packs and a best-effort Minecraft visual-pack converter; do not make glTF/GLB the pack contract.
+- `ASSET-02` — Design a low-to-high selected resource-pack stack where the last whole asset wins; exclude dependency DAGs, deep merge, and per-texture layering.
+- `ASSET-03` — Run a bounded spike for VibeCraft voxel model/rig source format; define `RigProfile` compatibility and reusable built-in animations without Minecraft-bone compatibility.
+- `ASSET-04` — Design fixed `RigProfile` clip selection and texture animation for v1; defer user-authored custom clips and animation graphs.
+- `ASSET-05` — Design a bounded, engine-neutral material authoring graph that compiles to fixed engine templates, never arbitrary custom shaders.
+- `MOD-01` — Compare sandbox runtime candidates (Wasm component and constrained Lua family) for one public extension API; private native forks are outside it.
 - `MOD-02` — Design scoped permissions and trust levels for untrusted client mods.
 - `MOD-03` — Research stable mod APIs, lifecycle hooks, registries, events, and lessons from Forge, Fabric, Bukkit, and clones.
 

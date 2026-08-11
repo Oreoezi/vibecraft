@@ -50,7 +50,7 @@ warm-up, percentile, duration, and overload response.
 | E2 | Persistence | SQLite WAL/FULL vs one measured fallback if it fails | Freeze v1 store/durability/envelope |
 | E3 | Movement clock | 20 Hz prediction; exactly nested 40 Hz only after a recorded 20 Hz failure | Freeze controller/rules/correction timeline |
 | E4 | Transport/trust | Pinned GNS first; one focused alternative only if it fails | Select transport, ownership, trust, admission, backpressure |
-| E5 | Local host | Supervised child-loopback vs embedded adapter | Select packaged desktop default without changing `ServerCore` |
+| E5 | Local host | Validate the selected supervised child-loopback topology; retain embedded hosting only as a conformance/fallback adapter | Greenlight packaging, pause/save, crash isolation, and lifecycle behavior without changing `ServerCore` |
 | E6 | Renderer | Hidden-face baseline vs greedy; nodes/ArrayMesh vs low-level server path | Select simplest backend meeting the fixture |
 | E7 | Resource pack | Minimal `.vcpak`, strict ZIP/VFS, logical digest, one base pack | Freeze only exercised resource identity/path contracts |
 | E8 | Wasm sandbox | Wasmtime host/toolchain/compile/cache/capability hostile spike | Greenlight Wasm, choose another isolation, or defer mods |
@@ -61,8 +61,8 @@ Every experiment ends in `greenlight`, `revise`, `defer`, or `reject`, and faile
 
 - Survival breadth until the integrated first playable passes G5.
 - Combat rewind, support-loss grace, speculative collision, and whole-world rollback.
-- General pack dependency/override ecosystem, Minecraft conversion, animated GLB rigs, and hot reload beyond the first-party need.
-- Sandboxed/public mods, trusted native loading, and ABI 1.0 until sandbox tests and two first-party dogfood features survive refactoring.
+- Minecraft conversion, the native voxel model/rig format spike, user-authored animation graphs, and hot reload beyond the first-party need. Ordered whole-asset resource-pack overlays are already selected; a dependency DAG is not planned.
+- Sandboxed/public mods and ABI 1.0 until sandbox tests and two first-party dogfood features survive refactoring. Private native forks remain outside the public extension ecosystem.
 - Structures, multiple generator epochs, seam adapters, broad biomes/caves, and redstone until the basic durable world is healthy.
 - Far-terrain LoD, shader light pages, GI, volumetrics, OIT, advanced reflection/refraction, and procedural assets.
 - Parallel live-region simulation, alternative production databases, anonymous public servers, relays/account services, and 32/64/128 Hz world profiles.

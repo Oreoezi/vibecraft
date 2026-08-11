@@ -1,4 +1,4 @@
-# ASSET-02 Pack manifest, dependencies, overrides, and conversion
+# ASSET-02 Pack manifest, ordered overlays, and conversion
 
 Status: Proposed
 
@@ -8,19 +8,41 @@ Related spec: [`../../design_doc.md`](../../design_doc.md)
 
 ## Decision
 
-Recommended choice: Use a strict, versioned, **resource-only** `pack.json`; resolve one immutable resource-pack version per package ID into a deterministic dependency DAG and exact content lock; allow only declared whole-asset overlays of required resource packs; and implement Minecraft compatibility as edition/version-specific offline conversion into an ordinary `.vcpak`. Future data packs, sandbox components, and native plugins may share resolver vocabulary but require distinct extensions, manifests, parsers, and trust UI.
+Recommended choice: Use a strict, versioned, **resource-only** `pack.json` and an
+explicit low-to-high profile stack of exact package artifacts. Every asset key resolves
+to the last selected pack that defines it; replacement is whole-asset only. Resource
+packs have no dependency DAG. Minecraft compatibility is best-effort edition/version-
+specific offline conversion into an ordinary `.vcpak`.
 
-One-sentence rationale: Package identity, API compatibility, load order, and byte agreement are different concerns, so recording each explicitly prevents accidental last-file-wins behavior and avoids freezing VibeCraft around Minecraft's changing schemas.
+One-sentence rationale: Explicit user stack order gives the familiar texture-pack
+behavior deterministically, while exact locks prevent filesystem discovery, Godot, or
+Minecraft semantics from choosing a winner.
 
-The first-party `vibecraft.base` art pack is not privileged by the loader. It is an ordinary required resource package, lowest in the selected profile, and can be overlaid only through the same declared rules as another package.
+### Owner decision — 2026-08-10
+
+Resource packs are a simple ordered overlay stack: `vibecraft.base`, then each selected
+pack from low to high priority. The last pack defining an asset wins. There is no
+resource-pack dependency solver, required/optional edge, authorization rule, or
+cross-pack deep merge. The UI and multiplayer lock expose the complete stack and the
+winning origin for every asset.
+
+The first-party `vibecraft.base` art pack is the required index-zero entry of every
+profile. It is not special after that: any later selected pack may replace any of its
+resource assets through the same whole-asset rule.
 
 ## Context and constraints
 
-- The client must know what a pack is, what it requires, which namespaces it owns, which foreign assets it intends to replace, and which engine capabilities its descriptors require before decoding expensive media.
-- Resource packs, declarative data, sandboxed modules, and trusted native plugins have different trust, side, parsers, and failure policies. They may later share `(artifact_kind, package_id, version, digest, requires)` resolver vocabulary, but a resource artifact can never become executable by adding a manifest field.
+- The client must know what a pack is, its exact identity, where it appears in the
+  selected stack, and which engine capabilities its descriptors require before
+  decoding expensive media.
+- Resource packs, declarative data, and sandboxed modules have different trust, side,
+  parsers, and failure policies. They may later share identity vocabulary, but a
+  resource artifact can never become executable by adding a manifest field.
 - A version string is human/publisher intent; it does not prove byte identity. `ASSET-01` provides `LogicalContentDigest`, and `NET-09` binds the resolved lock declaration to an authenticated session.
 - Unordered directory discovery and “last loaded wins” are not acceptable semantics. The same profile must resolve identically on every platform.
-- Cosmetic replacement is useful, but undeclared cross-package replacement masks typos and lets an unrelated pack hijack assets.
+- Cosmetic replacement is useful. Its scope is visible and deterministic because the
+  selected profile, rather than directory discovery or hidden dependency order, is the
+  complete precedence rule.
 - V1 needs whole-asset replacement. Generic JSON merge, inheritance across package boundaries, and deletion/tombstone semantics would each become a second schema and are not justified yet.
 - Minecraft Java and Bedrock have different pack contracts. Conversion must name edition and source version and produce a report rather than silently dropping unsupported features.
 
@@ -28,9 +50,9 @@ The first-party `vibecraft.base` art pack is not privileged by the loader. It is
 
 | Option | Strengths | Costs/risks | Fit for VibeCraft |
 | --- | --- | --- | --- |
-| Filesystem order plus last-file-wins | Minimal loader code; familiar texture-pack behavior | Platform/discovery nondeterminism, typo masking, hijacks, no dependency diagnostics | Rejected |
-| User-ordered stack with no manifests | Simple cosmetic overlays | Cannot resolve libraries, versions, capabilities, namespace owners, or server locks | Rejected |
-| **Strict manifests + dependency DAG + declared whole-asset overlays + exact lock** | Deterministic, diagnosable, reproducible, supports first/third-party parity | Resolver/tooling work; authors must state intent | **Recommended** |
+| Filesystem order plus last-file-wins | Minimal loader code; familiar texture-pack behavior | Platform/discovery nondeterminism and invisible winners | Rejected |
+| **Explicit low-to-high user stack + strict manifests + exact lock** | Familiar overlays, deterministic winners, simple UI, reproducible multiplayer agreement | No shared pack libraries or automatic composition | **Accepted** |
+| Dependency DAG + declared override authorization | Supports modular package libraries | Resolver/tooling complexity exceeds the desired resource-pack model | Rejected for resource packs |
 | Generic deltas/JSON merge patches | Small patches and composability | Type-specific merge semantics, ordering conflicts, schema/version debt, difficult provenance | Defer until a concrete high-value use case exists |
 | Embed/import Minecraft metadata at runtime | Quick apparent compatibility | Edition/version ambiguity; foreign semantics become permanent runtime API; unsupported extensions fail unpredictably | Rejected; offline converter only |
 | UUID-only package identity | Easy generation and rename tolerance | Poor diagnostics/discovery and author UX; UUID/version still does not prove bytes | Rejected as primary identity; signatures may use separate key IDs later |
@@ -43,7 +65,7 @@ The first-party `vibecraft.base` art pack is not privileged by the loader. It is
 
 **Bedrock Edition official documentation.** Bedrock requires a manifest with unique IDs, pack/module versions, minimum engine version, module kinds, and dependencies; dependencies cause required packs/modules to load first ([manifest reference](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/addonsreference/packmanifest), [dependency reference](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/manifestreference/dependency)). Microsoft separately documents identifier-based replacement of models, animations, and controllers ([overwriting assets](https://learn.microsoft.com/en-us/minecraft/creator/documents/overwritingassets)). This validates explicit metadata and identity, while Bedrock's separate semantics reinforce conversion rather than a generic “Minecraft pack” mode.
 
-Official cooperative-add-on guidance asks paired behavior/resource packs to depend on each other and recommends creator-specific prefixes because many contained identifiers are globally collision-prone ([cooperative add-on guidance](https://learn.microsoft.com/en-us/minecraft/creator/documents/practices/guidelinesforbuildingcooperativeaddons)). VibeCraft should make namespace ownership enforceable instead of advisory and should reject dependency cycles rather than recommend mutual dependencies.
+Official cooperative-add-on guidance asks paired behavior/resource packs to depend on each other and recommends creator-specific prefixes because many contained identifiers are globally collision-prone ([cooperative add-on guidance](https://learn.microsoft.com/en-us/minecraft/creator/documents/practices/guidelinesforbuildingcooperativeaddons)). VibeCraft keeps resource packs simpler: asset identity remains namespaced, while explicit profile order—not dependencies—chooses a replacement winner.
 
 ### Luanti
 
@@ -63,9 +85,9 @@ JSON Schema Draft 2020-12 provides a standardized way to publish and test machin
 
 Directly sourced:
 
-- Minecraft, Luanti, and Terasology all separate package/dependency metadata from asset files.
+- Minecraft, Luanti, and Terasology all separate package metadata from asset files.
 - Minecraft Java and Bedrock use materially different version and manifest systems.
-- Luanti ties intentional registration/media replacement to dependency relationships.
+- Luanti demonstrates that equal-named media replacement needs a deterministic policy.
 - Package version and downloaded-content hash are represented separately in Minecraft's server-pack path.
 
 VibeCraft engineering inference:
@@ -104,20 +126,6 @@ Illustrative valid resource-pack manifest:
   "homepage": "https://example.invalid/high-res",
   "artifact_kind": "resource_pack",
   "namespaces": ["example"],
-  "requires": [
-    { "id": "vibecraft.base", "version": ">=1.0.0 <2.0.0" }
-  ],
-  "optional_requires": [],
-  "overrides": [
-    {
-      "target": "vibecraft.base",
-      "version": ">=1.0.0 <2.0.0",
-      "rules": [
-        { "namespace": "vibecraft", "kind": "textures", "path_prefix": "block/" },
-        { "namespace": "vibecraft", "kind": "materials", "path_prefix": "block/" }
-      ]
-    }
-  ],
   "required_capabilities": [
     "material.voxel_pbr@1"
   ],
@@ -130,63 +138,55 @@ Illustrative valid resource-pack manifest:
 Rules:
 
 - JSON is UTF-8 without comments. Duplicate object properties, non-finite numbers, invalid Unicode, or unknown fields outside `metadata` are errors.
-- `artifact_kind` is exactly `resource_pack` in `pack.json`. `.vcpak` permits only the `ASSET-01` resource tree. `data_pack`, `sandbox_component` (`.vcmod`/`mod.json`), and `native_plugin` (`native-plugin.json` in a trusted local/operator directory) are separate future artifact contracts and cannot be embedded or selected through this parser.
-- Cross-kind overrides are forbidden. A future sandbox component that needs art depends on a `.vcpak`; it does not hide assets or executable code in the other artifact.
+- `artifact_kind` is exactly `resource_pack` in `pack.json`. `.vcpak` permits only the `ASSET-01` resource tree. `data_pack` and the eventual sandbox component artifact are separate future contracts and cannot be embedded or selected through this parser. Private native forks are outside package discovery entirely.
+- Cross-kind embedding is forbidden. A future sandbox component that needs art selects
+  a separate `.vcpak`; it does not hide assets or executable code in the other artifact.
 - `license` is SPDX-expression-shaped metadata where possible but is not interpreted as permission by the loader. Missing/unknown licensing is shown to users and repositories; it is not silently invented.
 - `metadata` values are informational, bounded JSON and do not affect resolution. Keys beginning `x-` may be used there by tools. The resolver never executes URLs or fetches dependencies.
-- `logical_content_sha256`, `artifact_sha256`, `artifact_length`, install path, user priority, signatures, and resolved dependency versions are absent. They are properties of an artifact/profile/lock, not publisher-authored claims inside the artifact.
+- `logical_content_sha256`, `artifact_sha256`, `artifact_length`, install path, stack
+  position, signatures, and resolved profile contents are absent. They are properties
+  of an artifact/profile/lock, not publisher-authored claims inside the artifact.
 
 The project should publish the normative JSON Schema and golden valid/invalid fixtures beside the eventual loader. The C# parser must enforce the same constraints without first materializing an unbounded generic object graph.
 
-### Package selection and dependency resolution
+### Package selection and ordered precedence
 
-A content profile selects top-level `(package id, desired version/range)` entries in explicit low-to-high user priority. It always includes the exact shipped-compatible `vibecraft.base` requirement.
+A content profile is an explicit, low-to-high list of exact installed artifacts. It
+always begins with the shipped-compatible `vibecraft.base`; every later entry is a user
+choice, not a dependency of another pack. The profile/lock stores `(id, version,
+logical_content_sha256)` for each position, so selecting a different build or changing
+the order is a different profile.
 
 Resolution algorithm:
 
 1. Discover only `ASSET-01`-valid package images and parse their bounded manifests.
-2. Reject ambiguous duplicate `(id, version)` artifacts with different content digests.
-3. Starting from selected roots, choose **one installed version per package ID** satisfying every accumulated required constraint. Prefer the highest stable SemVer; use a pre-release only when explicitly selected/allowed. The resolver never downloads.
-4. Include an `optional_requires` edge only when a selected/installed version satisfying its range exists. An absent optional dependency is not an error; a present but incompatible version is reported and treated as absent unless another required edge selects it.
-5. Build edges from dependency to dependent. Reject required dependency cycles and override cycles with the complete cycle path. Optional edges that create a cycle are dropped with a warning recorded in the lock.
-6. Validate package capability requirements against the engine's declared capability set before parsing assets.
-7. Validate unique namespace ownership and every foreign-namespace write/duplicate through the override rules below.
-8. Topologically order dependencies before dependents. Among independent selected roots, preserve the user's low-to-high order. Lexical package ID is only a deterministic diagnostic/iteration tie-breaker and never grants override priority.
-9. Resolve every asset key, validate all references against the final view, compile a staging snapshot, and emit an exact lock.
+2. Match each profile entry to exactly one installed artifact. A missing entry or an
+   ambiguous duplicate `(id, version, digest)` fails with an actionable diagnostic.
+3. Validate the manifest schema and required engine capabilities for every selected
+   artifact before decoding its media. The resolver never downloads anything.
+4. Scan selected packs strictly from low to high. Each valid complete logical asset
+   replaces the previous definition of the same `AssetKey`; no file, JSON field, or
+   array is merged.
+5. Resolve references against the final winning map, compile a staging snapshot, and
+   emit an exact ordered lock.
 
-If constraints have no single-version solution, resolution fails with the shortest useful explanation: requesting package, required range, available versions, and conflicting edge. V1 does not load two versions of one package ID or privately scope asset namespaces per dependency.
+Filesystem enumeration, archive order, package filename, locale, and dictionary order
+never choose a winner. A pack may define a key in its own or another namespace; the
+profile order is intentionally the entire override authorization model. The UI reports
+every contributing origin and the final winner.
 
-### Override authorization and precedence
+### Whole-asset replacement policy
 
-Writing an asset in a namespace listed under `namespaces` is an ordinary definition. Writing the same `AssetKey` supplied by another selected package is legal only through an `overrides` entry satisfying all of these conditions:
-
-1. `target` appears in this package's `requires` list, not only `optional_requires`.
-2. The selected target version satisfies both the dependency and override ranges.
-3. The asset key's namespace, kind, and path match one explicit rule.
-4. The overriding package is later than the target by dependency order.
-5. The replacement file independently validates as that asset kind.
-
-`path_prefix` is a canonical asset path prefix ending in `/`, or the empty string for the entire named kind/namespace. It is literal ordinal text, not a glob or regular expression. Exact-single-asset replacement uses the full asset path in an `assets` rule added to the schema rather than abusing prefixes; v1 may support both forms:
-
-```json
-{
-  "namespace": "vibecraft",
-  "kind": "models",
-  "assets": ["block/chest", "block/trapped_chest"]
-}
-```
-
-Precedence/failure policy:
-
-- Dependencies are always lower than dependents.
-- Two independent top-level overlay packs authorized to replace the same lower asset use the user's explicit low-to-high profile order; the UI shows the full override chain and winner.
-- If two transitive packages collide and no explicit top-level ordering establishes a winner, resolution fails instead of choosing discovery or lexical order.
-- An unrelated duplicate key, undeclared foreign-namespace asset, override outside its prefix, or target-version mismatch is fatal.
-- Replacement is the complete logical asset. There is no generic JSON deep merge, array concatenation, delete marker, tombstone, or implicit parent inheritance across packages.
-- An override can replace assets, not another package's manifest, namespace ownership, dependency declarations, capability requirements, lock metadata, or license/provenance record.
-- References inside the final snapshot resolve normally, so a texture-only overlay can intentionally affect an unchanged material/model. The compiler reports the effective origin chain for each reference.
-
-This model intentionally differs from Java's broad ordered stack and Godot's same-path project replacement: order matters only after explicit authorization.
+- Replacement is the complete logical asset. There is no generic JSON deep merge,
+  array concatenation, deletion marker, tombstone, or cross-package inheritance.
+- A later texture can replace a texture while an unchanged material/model keeps its
+  reference; a later model can replace that model without restating unrelated assets.
+- A malformed winning asset fails the staged profile rather than silently falling back
+  to a lower asset. The previous active profile remains live.
+- A pack cannot replace another package's manifest, alter stack order, change lock
+  metadata, or turn itself into executable content.
+- Duplicate definitions inside one pack remain invalid at the archive/path layer. The
+  same key across different selected packs is normal and deterministic.
 
 ### Capabilities and API evolution
 
@@ -194,8 +194,8 @@ The engine advertises an `asset_api` version and namespaced capability versions 
 
 ```text
 model.cuboid@1
-model.gltf_core@1
-animation.graph@1
+model.voxel_rig@1             // format spike; not yet a shipped requirement
+animation.rig_profile@1
 material.voxel_pbr@1
 material.transmission@1       // only if RENDER-06 later greenlights it
 ```
@@ -222,17 +222,15 @@ ContentLockV1 {
   lock_schema: 1
   asset_api: exact engine asset API
   packages_low_to_high[] {
+    stack_index
     id
     version
     artifact_kind              // resource_pack in this v1 contract
     logical_content_sha256     // ASSET-01 logical-map digest
     artifact_sha256?           // literal download artifact integrity only
     artifact_length?           // paired with artifact_sha256
-    resolved_required_ids[]
-    resolved_optional_ids[]
     required_capabilities[]
   }
-  dropped_optional_edges[]
   effective_asset_map_digest
   lock_sha256
 }
@@ -297,12 +295,18 @@ ConversionReportV1 {
 
 Java cuboid models/blockstates, textures, sounds, language files, and simple animation metadata can map where native equivalents exist. Bedrock geometry/animations/controllers require their own mapping. Core shaders, arbitrary Molang expressions, edition-specific render controllers, custom third-party extensions, and unsupported blend/material behavior are reported, never silently approximated. The generated pack contains provenance metadata, but no `minecraft:` namespace receives special runtime meaning.
 
-Conversion success means “valid native output with a reviewed report,” not visual or behavioral parity. The tool should support incremental re-conversion from source; users should not hand-edit generated output without either forking it or accepting that regeneration replaces it.
+Conversion is best-effort tooling supplied as-is. Success means only “valid native
+output with a reviewed report,” never visual, behavioral, or practical usability
+parity. The tool should support incremental re-conversion from source; users should not
+hand-edit generated output without either forking it or accepting that regeneration
+replaces it.
 
 ## Greenlight criteria
 
 - Given the same installed artifacts and selected profile, resolution produces byte-identical canonical locks and effective asset maps regardless of filesystem enumeration, archive order, locale, OS, or process hash randomization.
-- The resolver reports actionable paths for missing requirements, unsatisfied ranges, duplicate ID/version bytes, namespace collisions, required/optional cycles, unknown capabilities, and unauthorized/ambiguous overrides.
+- The resolver reports actionable paths for missing stack entries, duplicate
+  ID/version/digest artifacts, unsupported capabilities, malformed winning assets, and
+  final winning origins.
 - Every effective asset has exactly one winning origin plus a complete ordered override chain; no collision is settled by directory discovery or dictionary insertion order.
 - Package `version`, asset API compatibility, content digest, literal download hash, and publisher trust are separately represented in code/UI/tests.
 - Activation is all-or-nothing: corrupting any required descriptor leaves the previous snapshot and lock active.
@@ -313,20 +317,29 @@ Conversion success means “valid native output with a reviewed report,” not v
 
 Required: yes.
 
-Smallest useful experiment: Build a headless resolver/packager for `vibecraft.base`, two independent texture overlays, one shared material dependency, and one malformed package for every failure class. Add a fake Java 1.20.2 input converter that maps two textures, one cuboid model, one blockstate, and one unsupported shader/extension into a native pack plus report.
+Smallest useful experiment: Build a headless resolver/packager for `vibecraft.base`,
+two independent texture/model overlays, and one malformed package for every failure
+class. Add a fake Java 1.20.2 input converter that maps two textures, one cuboid model,
+one blockstate, and one unsupported shader/extension into a native pack plus report.
 
 Success metrics:
 
 - Shuffle package discovery and dictionary insertion 10,000 times; obtain one lock/digest and one asset-origin report.
-- Resolve 100 packages, 1,000 dependency edges, and 100,000 asset keys in under 250 ms after manifests/indexes are cached on the eventual minimum-spec desktop, with bounded linear memory.
-- Exhaustive fixtures cover every comparator boundary, prerelease rule, cycle shape, duplicate namespace/key, override-prefix edge, optional-edge drop, and conflicting top-level order.
+- Resolve 100 explicitly ordered packages and 100,000 asset keys in under 250 ms after
+  manifests/indexes are cached on the eventual minimum-spec desktop, with bounded
+  linear memory.
+- Exhaustive fixtures cover duplicate artifact identity, missing stack entries,
+  duplicate paths, replacement of each asset kind, malformed winning assets, and every
+  stack-order permutation that changes a winner.
 - A failed staged reload changes zero active asset handles and leaks no archive/cache handles after retirement.
 - Re-running the converter with identical source/tool/mapping versions yields the same native content digest and conversion report; every unsupported construct appears with a stable code and source path.
 
 ## Risks and open questions
 
 - A package repository, acquisition URLs, publisher signatures, revocation, and trust UI are separate distribution/security decisions. A signature proves provenance, not safety or quality.
-- Optional dependencies can create environment-dependent output; the exact lock makes that visible, but authors should prefer required dependencies or explicit fallbacks.
+- Resource packs deliberately cannot express reusable package dependencies. If an
+  author needs a library-like relationship, publish a combined pack or make the
+  required stack order explicit in installation instructions/profile tooling.
 - Overlay packs can intentionally create visually misleading content. Public servers need `NET-09` policy for free, allowlisted, or exact cosmetic packs.
 - One resolver implementation may later coordinate distinct artifact classes, but this decision greenlights only resource packs. It must not be generalized into an executable shared manifest without a separate security decision.
 - Whether worlds store their historical resource lock for faithful screenshots/replays is a product decision; authoritative save compatibility must not depend on cosmetic resources.
@@ -340,8 +353,10 @@ Success metrics:
 
 - Native runtime interpretation of any Minecraft edition: rejected.
 - Inferring edition/version or silently accepting “close enough” Minecraft input: rejected for release conversion.
-- Last-file-wins without dependency and override authorization: rejected.
+- Filesystem/discovery-order last-file-wins: rejected; explicit profile-order
+  whole-asset replacement is accepted.
 - Generic deep merge, JSON Patch, deletion/tombstones, and cross-package inheritance: deferred.
-- Multiple active versions of one package ID: rejected for v1.
+- Selecting the same package ID more than once in one resource profile: rejected for
+  v1; install a combined/repackaged artifact when that is genuinely required.
 - Resolver downloads or executes acquisition URLs: rejected; installation is a separate user-mediated workflow.
 - Treating version equality, UUID equality, signatures, or hashes as interchangeable: rejected.

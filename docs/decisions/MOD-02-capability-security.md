@@ -8,13 +8,23 @@ Related spec: [`../../design_doc.md`](../../design_doc.md)
 
 ## Decision
 
-Recommended choice: Use deny-by-default, versioned, parameterized capabilities enforced at every host call and paired with independent resource quotas; grant them only to sandboxed Wasm principals, while classifying native .NET extensions as unrestricted trusted code outside this model.
+Recommended choice: Use deny-by-default, versioned, parameterized capabilities
+enforced at every host call and paired with independent resource quotas; grant them
+only to principals running in the one selected sandbox runtime. Native .NET code is
+outside the public extension model and cannot claim these protections.
 
 One-sentence rationale: A capability is useful only when possession is unforgeable, scope is narrow, every use is validated, and authority cannot be recovered through another broad API.
 
-Capability names are not user-facing promises by themselves. The security boundary consists of all of the following together:
+### Owner direction — 2026-08-10
 
-1. a Wasm runtime with no ambient imports;
+The capability contract is runtime-neutral until the runtime spike selects an
+implementation. Current Wasm/Wasmtime material is a candidate design and hostile-test
+corpus, not a decision to expose a second native ecosystem or to reject Lua without a
+comparable capability/quotas prototype.
+
+Capability names are not user-facing promises by themselves. The security boundary consists of all of the following together (with “sandbox runtime” replacing the Wasm-specific mechanisms if another candidate is selected):
+
+1. a sandbox runtime with no ambient authority;
 2. a host-created module principal and immutable grant set;
 3. narrow typed host functions;
 4. semantic validation and ownership checks at use time;

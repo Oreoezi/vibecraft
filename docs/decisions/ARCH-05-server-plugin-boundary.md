@@ -8,15 +8,30 @@ Related spec: [`../../design_doc.md`](../../design_doc.md)
 
 ## Decision
 
-Recommended choice: Make data packs and metered Wasm components the public server extension boundary, with immutable event/read models, host-owned logical scheduling, and validated command buffers committed by the authoritative simulation owner; offer in-process native .NET plugins only as an explicitly trusted operator tier loaded at startup.
+Recommended choice: Make data packs and one metered sandboxed public component API the
+server extension boundary, with immutable event/read models, host-owned logical
+scheduling, and validated command buffers committed by the authoritative simulation
+owner. Select the sandbox runtime only after its prototype; do not maintain an
+in-process native .NET plugin API as a parallel public ecosystem.
 
-One-sentence rationale: This preserves deterministic single-writer world ownership and allows untrusted plugin code to be interrupted/disabled, while still allowing operators who accept full process risk to use native C#.
+One-sentence rationale: This preserves deterministic single-writer world ownership and
+gives extensions one portable, reviewable compatibility surface rather than splitting
+the ecosystem between a sandbox and unrestricted engine internals.
+
+### Owner decision — 2026-08-10
+
+There is one public extension ecosystem. Missing power should result in a deliberate
+API request or a project fork; it does not create a supported native-plugin escape
+hatch. Lua and Wasm remain runtime candidates until the sandbox/tooling gate decides
+which can enforce the required limits. Plugin persistence is host-brokered: the server
+may use one operator-configured database service and isolate each plugin principal's
+data, but public plugins never receive arbitrary database credentials or core-world
+storage access.
 
 Server “plugin support out of the box” therefore means:
 
 - first-class declarative content and sandboxed server modules using the same namespaced packages/capability ABI as `MOD-01`/`MOD-02`;
 - lifecycle, scheduling, events, commands, persistence, budgets, diagnostics, and failure semantics designed before a public API is stabilized;
-- an optional trusted native .NET loader for operator-installed assemblies, clearly outside sandbox guarantees;
 - no supported mixins, reflection patches, raw engine collections, direct database access, or asynchronous mutation of live world state.
 
 ## Context and constraints
@@ -26,7 +41,7 @@ Server “plugin support out of the box” therefore means:
 - `ARCH-02` keeps blocks compact, block entities sparse, and dynamic entities in replaceable stores. A plugin API must not expose those layouts.
 - `WORLD-09` requires namespaced versioned persistence, bounded opaque preservation, and explicit migrations.
 - A malicious or buggy sandbox module may attempt escape, denial of service, invalid mutations, stale handles, persistence abuse, event recursion, information disclosure, or nondeterministic ordering.
-- A trusted native plugin may do all of those plus P/Invoke, reflection, arbitrary I/O, thread creation, process termination, and memory corruption through native code. The server cannot securely contain it in-process.
+- A private native fork may do all of those plus P/Invoke, reflection, arbitrary I/O, thread creation, process termination, and memory corruption through native code. The server cannot securely contain it in-process, so it has no public-plugin compatibility contract.
 - Plugin callbacks cannot be allowed to turn a 50 ms world tick into an unbounded deadline. Count/fuel limits preserve deterministic work decisions; wall-time watchdogs detect runaway execution.
 - Future regionized simulation is possible but not greenlit. The API should express owner context without claiming that v1 is parallel.
 
@@ -34,8 +49,8 @@ Server “plugin support out of the box” therefore means:
 
 | Option | Strengths | Costs and failure modes | Fit for VibeCraft |
 | --- | --- | --- | --- |
-| Bukkit/Paper-style native plugins with broad server objects | Familiar, powerful, easy ecosystem growth | Full trust, main-thread stalls, mutable internals and synchronous assumptions become compatibility debt | Trusted tier only |
-| In-process native .NET plus permissions/`AssemblyLoadContext` | C# ergonomics and dependency separation | No security containment; cooperative unload; arbitrary threads/I/O | Trusted tier only |
+| Bukkit/Paper-style native plugins with broad server objects | Familiar, powerful, easy ecosystem growth | Full trust, main-thread stalls, mutable internals and synchronous assumptions become compatibility debt | Private-fork pattern only |
+| In-process native .NET plus permissions/`AssemblyLoadContext` | C# ergonomics and dependency separation | No security containment; cooperative unload; arbitrary threads/I/O | Private-fork pattern only |
 | Sandboxed Lua with curated globals | Excellent iteration and proven game modding pattern | Host allowlist is a long-lived escape surface; separate VM/ABI; quota implementation required | Viable guest later |
 | Wasm components plus capability command/event API | Actual code boundary; typed portable ABI; metering and explicit imports | Tooling/runtime maintenance; host APIs require careful design | **Recommended public executable tier** |
 | Out-of-process native plugins over RPC | Killable and OS-isolatable; native language freedom | Serialization latency, consistency/recovery, OS sandbox variance | Future high-risk/enterprise tier |
@@ -55,7 +70,7 @@ Engineering conclusion: VibeCraft should not implement region ticking in v1, but
 
 Luanti demonstrates that a voxel engine can sustain a broad namespaced server mod API and per-mod storage, but it also distinguishes ordinary sandboxed mods from operator-trusted mods allowed HTTP/insecure environment access ([Luanti HTTP API](https://docs.luanti.org/for-creators/api/http-api/), [server security guidance](https://docs.luanti.org/for-server-hosts/setup/)). Its security history includes multiple sandbox and access-control bypasses ([Luanti advisories](https://github.com/luanti-org/luanti/security)).
 
-The useful lesson is two-sided: server-side scripting is a proven product model, and every host escape hatch becomes a permanent security maintenance burden. VibeCraft will not provide a general “insecure environment” capability to sandboxed modules; operators can install a plainly trusted native plugin instead.
+The useful lesson is two-sided: server-side scripting is a proven product model, and every host escape hatch becomes a permanent security maintenance burden. VibeCraft will not provide a general “insecure environment” capability to sandboxed modules; an operator needing unrestricted code must maintain a private fork rather than receive a supported plugin escape hatch.
 
 ### Veloren and Wasm
 
@@ -63,11 +78,11 @@ Veloren's plugin guide uses Wasm and an event-driven host interface and calls th
 
 Wasmtime states that Wasm code has no outside I/O except linked imports and supplies fuel/epoch interruption for runaway code ([security](https://docs.wasmtime.dev/security.html), [interruption](https://docs.wasmtime.dev/examples-interrupting-wasm.html)). Its advisory record proves that the runtime itself remains a patchable security dependency ([advisories](https://github.com/bytecodealliance/wasmtime/security)). `MOD-01` owns the .NET host/tooling gate; this decision assumes that gate passes before sandboxed plugins ship.
 
-### .NET native plugins
+### Private native forks
 
 Microsoft explicitly says `AssemblyLoadContext` has no security features and loaded code receives full process permissions ([API documentation](https://learn.microsoft.com/en-us/dotnet/api/system.runtime.loader.assemblyloadcontext)). Unload is cooperative and can be prevented by plugin threads, callbacks, statics, or retained references ([unloadability](https://learn.microsoft.com/en-us/dotnet/standard/assembly/unloadability)).
 
-Direct conclusion: a native server plugin is equivalent to installing server software. VibeCraft may use a collectible context for dependency versioning and best-effort cleanup, but cannot promise that disabling it recovers a safe process.
+Direct conclusion: native server code is equivalent to changing server software. A private fork may choose its own loader, but VibeCraft cannot promise a public native-plugin compatibility or containment contract.
 
 ## Proposed architecture
 
@@ -78,24 +93,32 @@ data_pack
   registration/configuration only; validated before world open
 
 sandbox_component
-  public executable API; capability-limited, metered, no ambient WASI;
-  one principal/store/instance and isolated storage/queues per module
+  the single public executable API; capability-limited, metered, no ambient authority;
+  one principal/runtime instance and isolated storage/queues per module
 
-native_plugin
-  operator-installed startup plugin; full server process authority;
-  cooperative API rules, attribution and watchdog metrics, no containment claim
+private fork/native patch
+  outside the public package/API contract; no compatibility, containment, or
+  multiplayer-distribution promise
 ```
 
-Artifacts are class-separated: `.vcpak` is resource-only; a future `data_pack` has its own declarative parser; `.vcmod` contains one standard Wasm component plus bounded metadata; native .NET lives in an operator-controlled trusted directory. A sandbox component that needs art/data depends on those separate artifacts. Client and server components use distinct WIT worlds, host-created principals, and grant sets, and never share memory or an implicit private channel. Communication uses bounded server-defined messages or ordinary authoritative state.
+Artifacts are class-separated: `.vcpak` is resource-only; a future `data_pack` has its
+own declarative parser; the eventual public component artifact has bounded metadata
+and one selected sandbox-runtime payload. A sandbox component that needs art/data uses
+those separate artifacts. Client and server components use distinct host contracts,
+host-created principals, and grant sets, and never share memory or an implicit private
+channel. Communication uses bounded server-defined messages or ordinary authoritative
+state.
 
-The dedicated server never downloads/executes native code from clients. In singleplayer, the external server process from `ARCH-04` limits accidental corruption of the Godot client, but a native server plugin still runs under the user's OS account and can access user resources; process separation alone is not a native-plugin sandbox.
+The dedicated server never downloads or executes native code from clients. A private
+fork may of course modify its own process, but that is not a VibeCraft extension
+mechanism and cannot be required for joining a normal server.
 
 ### Lifecycle and registration
 
 ```text
 discover/validate package bytes
   -> resolve dependencies, content lock, ABI, grants, quotas
-  -> instantiate sandbox stores / native load contexts
+  -> instantiate sandbox runtime instances
   -> bootstrap (declare migrations and registrations)
   -> register namespaced content, commands, handlers, schedules
   -> freeze registries and handler order
@@ -182,7 +205,11 @@ This shape follows the useful part of Folia—owner-aware scheduling—without i
 - persistence: own namespaced world/player/entity storage and own migration functions;
 - deterministic utilities: logical tick and named deterministic RNG streams.
 
-No sandboxed server plugin receives raw filesystem, SQL, arbitrary sockets/HTTP, process/environment, native code, wall clock, OS entropy, Godot/client objects, packet construction, or an insecure-environment escape. Future external-service integration must use a destination-limited broker with separate credentials, timeouts, request/response caps, and nondeterminism semantics.
+No sandboxed server plugin receives raw filesystem, SQL, arbitrary sockets/HTTP,
+process/environment, native code, wall clock, OS entropy, Godot/client objects, packet
+construction, or an insecure-environment escape. Future external-service integration
+must use a destination-limited broker with separate credentials, timeouts,
+request/response caps, and nondeterminism semantics.
 
 ### Provisional server budgets
 
@@ -211,6 +238,11 @@ Trusted native plugin time, allocations, events, and commands are measured and a
 ### Persistence and migrations
 
 - The host owns persistence. Modules use records scoped by host-created `PrincipalId`, component/side, and world/player/entity scope through `server.plugin-storage`; they never receive SQLite connections/paths or inherit data merely by reclaiming a package name.
+- `IPluginDataStore` is an operator-configured host service. Its provider may place a
+  principal in a separate database, schema, or logical namespace, but the plugin sees
+  only bounded host operations and never a connection string, SQL dialect, or another
+  principal's rows. The host may use one configured SQL service for many principals
+  without letting one plugin's storage choice become a core-world dependency.
 - Runtime writes stage with the callback and join the same prevalidated in-memory commit revision. `WORLD-04` later persists world/plugin records from that revision atomically; its database transaction is not assumed to roll back already-mutated live memory.
 - Each record declares package namespace and schema version. Payload and record count/bytes are capped; iteration is paginated.
 - Migrations register during bootstrap, run before world publication, access only the package namespace, and use stricter fuel/time/output quotas. They cannot perform network I/O or mutate unrelated world state.
@@ -282,11 +314,10 @@ Every list/bytes/query is bounded or paginated. Every handle is opaque/generatio
 
 - One data pack and one sandboxed server component can add a block/item/recipe, command, scheduled behavior, world event reaction, and versioned saved value without receiving an engine object or direct mutable collection.
 - All world/inventory/entity changes execute through validation on the owning simulation context; no network/I/O/worker callback mutates live world state.
-- The Wasm host passes `MOD-01`/`MOD-02` import, interruption, memory, allocation, handle, and platform gates.
+- The selected sandbox runtime passes `MOD-01`/`MOD-02` import, interruption, memory, allocation, handle, and platform gates.
 - Deterministic handler order and plugin RNG produce identical replay hashes across worker counts and randomized asynchronous completion.
 - Trap/quota/invalid-command tests commit no partial command or storage result; a required-module failure saves/stops at the last committed boundary.
 - Missing module data survives load/save byte-for-byte where `WORLD-09` permits, and migrations cannot access another namespace.
-- Native plugin documentation/UI/CLI states full process trust and demonstrates that `AssemblyLoadContext` is not the sandbox.
 - Representative plugin load stays within the 5 ms p95 aggregate sandbox budget and the full `WORLD-08` target remains below 50 ms p99 on the declared baseline server.
 - At least two first-party gameplay features use the public data/command/event/storage surface before ABI 1.0 is promised, as required by `MOD-03`.
 
@@ -294,7 +325,7 @@ Every list/bytes/query is bounded or paginated. Every handle is opaque/generatio
 
 Required: yes.
 
-Build an engine-neutral C# server harness with the `WORLD-08` tick phases, a tiny `ARCH-02` world/entity/inventory model, in-memory transactional persistence, a Wasmtime host, and a diagnostic native plugin loader. Implement one legitimate module plus an adversarial corpus.
+Build an engine-neutral C# server harness with the `WORLD-08` tick phases, a tiny `ARCH-02` world/entity/inventory model, in-memory transactional persistence, and the selected sandbox-host candidate. Implement one legitimate module plus an adversarial corpus.
 
 Functional cases:
 

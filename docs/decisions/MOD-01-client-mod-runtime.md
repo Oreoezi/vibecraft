@@ -8,14 +8,28 @@ Related spec: [`../../design_doc.md`](../../design_doc.md)
 
 ## Decision
 
-Recommended choice: Define three explicitly different extension tiers, but ship them in gates: resource packs first; sandboxed `.vcmod` WebAssembly components only after the hostile host/toolchain prototype; and opt-in native .NET plugins only as a separate unrestricted trusted installation path. Never present native .NET code as permission-contained.
+Recommended choice: Ship resource packs first, then one sandboxed public component API
+only after the hostile runtime/toolchain prototype. The sandbox runtime is not selected
+yet; WebAssembly/WIT remains a researched candidate alongside a carefully constrained
+Lua-family host. Do not maintain opt-in native .NET plugins as a parallel public API.
 
-One-sentence rationale: WebAssembly can begin without ambient host authority and expose only linked functions, whereas .NET assemblies loaded into the game retain the process's filesystem, network, native-code, reflection, memory, and termination authority.
+One-sentence rationale: The public API must have one capability-enforced boundary;
+native .NET assemblies retain the process's filesystem, network, native-code,
+reflection, memory, and termination authority and therefore cannot be that boundary.
+
+### Owner decision — 2026-08-10
+
+There is one public extension ecosystem. Native code belongs in private forks, not a
+second supported mod tier. WebAssembly and a sandboxed Lua-family host are candidates;
+the selected runtime must enforce the same capability, quota, interruption, storage,
+and update requirements before any public ABI is promised.
 
 The phrase “native client-side mod support with scoped permissions” in `design_doc.md` must therefore be split:
 
-- **Sandboxed client mods** receive enforceable, scoped capabilities and run as Wasm.
-- **Native .NET client plugins** are unrestricted trusted code chosen by the local user; permissions shown for them are informational compatibility declarations, not a security boundary.
+- **Sandboxed client mods** receive enforceable scoped capabilities through the one
+  selected public runtime.
+- **Private native modifications** are unrestricted code chosen outside the VibeCraft
+  extension contract; they receive no compatibility or security promise.
 - **Data/resource packs** contain no executable code and remain the preferred route for content that does not require logic.
 
 The sandbox protects the player’s machine and the client process from downloaded mod code. It does **not** prove to a server that the client is honest, prevent a modified client binary, or conceal information already replicated to the client. `NET-09` package hashes establish byte agreement only.
@@ -34,9 +48,9 @@ The sandbox protects the player’s machine and the client process from download
 | Option | Strengths | Costs and failure modes | Fit for VibeCraft |
 | --- | --- | --- | --- |
 | In-process native .NET with `AssemblyLoadContext` | Best C# ergonomics and performance; broad ecosystem access | Full process authority; cooperative unload; reflection/PInvoke/threads can bypass every friendly API | Trusted tier only |
-| Sandboxed Lua/Luau VM | Fast iteration and small scripts | Security depends on a perfect allowlist and VM embedding; one accidentally exposed library can become ambient authority; separate ABI/tooling | Viable future guest language, not the primary isolation boundary |
+| Sandboxed Lua/Luau VM | Fast iteration and small scripts | Security depends on a perfect allowlist and VM embedding; one accidentally exposed library can become ambient authority; separate ABI/tooling | Public-runtime candidate; must pass the same capability/quotas prototype |
 | Wasm core modules with a handwritten pointer/length ABI | Supported by current Wasmtime .NET APIs; small host surface | Parser/memory-validation burden; custom string/list/resource conventions become permanent | Prototype fallback only |
-| Wasm Component Model with WIT interfaces | Typed, versioned, language-neutral contracts and explicit imports/resources | .NET host bindings and guest toolchains are moving; component overhead and supported RIDs need measurement | **Recommended target** |
+| Wasm Component Model with WIT interfaces | Typed, versioned, language-neutral contracts and explicit imports/resources | .NET host bindings and guest toolchains are moving; component overhead and supported RIDs need measurement | Strong research candidate; not selected |
 | Out-of-process native mod host over IPC | OS process can be killed; stronger defense in depth | Cross-platform OS sandboxing is not uniform; high call latency; complicated UI/render integration | Deferred for high-risk capabilities |
 | Browser-style JavaScript runtime | Familiar and naturally event-driven | Adds another large runtime/JIT and host API; sandbox quality depends on embedding; no advantage over Wasm for this project | Reject for v1 |
 
@@ -81,18 +95,19 @@ data_pack
   declarative registries/configuration; no executable payload
 
 sandbox_component
-  WebAssembly Component Model artifact
-  imports only granted vibecraft:* interfaces
-  isolated Store/instance, memory, handle table, queues, and storage namespace
+  one selected sandbox-runtime artifact after its hostile-host gate
+  imports only granted VibeCraft capability interfaces
+  isolated instance, memory, handle table, queues, and storage namespace
 
-native_plugin
-  in-process assembly loaded through a collectible AssemblyLoadContext for
-  dependency separation and best-effort unload, with full process authority
+private native modification
+  outside public package discovery, multiplayer requirements, and compatibility policy
 ```
 
 The distinct `.vcmod`/`mod.json` manifest declares `artifact_kind: sandbox_component`, side, logical digest, supported `mod_abi` range, requested capabilities, and quota class. A content lock selects an exact artifact/ABI for cooperating clients. The user grants client capabilities; a server may require a sandbox component and minimum grant set, but it cannot force the user to grant locally sensitive authority. In that case joining fails with an actionable error.
 
-Native plugins use a separate directory, manifest kind, loader toggle, and UI. They are never downloaded automatically, never covered by the “safe mod” wording, and display a warning equivalent to running an application. Signing establishes publisher identity only; it does not make code safe.
+Private native modifications are never downloaded, selected, or required by the public
+extension resolver. They are ordinary local code changes/forks, not a package kind that
+normal users or servers must support.
 
 ### ABI and imports
 

@@ -8,7 +8,7 @@ Nothing is silently greenlit. Decision files are `Proposed`; measured mechanisms
 
 For this research packet, use this order when documents disagree:
 
-1. explicit owner decisions recorded against the greenlight checklist;
+1. explicit owner decisions in [`OWNER_DECISIONS.md`](OWNER_DECISIONS.md) and the greenlight checklist;
 2. the proposed requirements baseline and integration resolutions;
 3. individual decision briefs for details owned by that brief;
 4. adversarial reviews as dated evidence about the snapshot they reviewed;
@@ -21,13 +21,14 @@ prototype interpretation; it does not claim a product decision has already been 
 ## Recommended reading order
 
 1. [`PROPOSED-REQUIREMENTS-BASELINE.md`](research/PROPOSED-REQUIREMENTS-BASELINE.md) — the shortest implementation-independent rewrite of the vision into first-playable, survival, and post-v1 requirements.
-2. [`REVIEW-product-scope-and-sequencing.md`](research/REVIEW-product-scope-and-sequencing.md) — what the first playable actually is, G0–G5 gates, lock-in points, and the compact owner decision card.
-3. [`GREENLIGHT-CHECKLIST.md`](research/GREENLIGHT-CHECKLIST.md) — the choices to approve, prototype, defer, or reject without replying to 40 files individually.
-4. [`DEPENDENCY-MAP.md`](research/DEPENDENCY-MAP.md) — the acyclic G0–G5 path and the distinction between hard prerequisites, interface references, validation dependencies, and post-v1 coordination.
-5. [`FOUNDATION-00`](decisions/FOUNDATION-00-spec-risk-audit.md) — the original spec assumptions that were converted into testable requirements.
-6. The adversarial reviews: [architecture/networking](research/REVIEW-architecture-networking.md), [assets/modding/security](research/REVIEW-assets-modding-security.md), and [world/render/storage](research/REVIEW-world-render-storage.md), followed by the [independent document-integrity audit](research/REVIEW-document-integrity.md). The first two preserve their pre-integration findings; use their disposition tables with the integration log, not as descriptions of unedited current files.
-7. Individual briefs from the [complete decision index](decisions/README.md) when a recommendation or trade-off needs inspection.
-8. [`PROTOTYPE_PROGRAM.md`](research/PROTOTYPE_PROGRAM.md) only after reading the product sequence; it maps all long-term experiments and is intentionally broader than the first playable.
+2. [`OWNER_DECISIONS.md`](OWNER_DECISIONS.md) — decisions and constraints recorded from the owner review.
+3. [`REVIEW-product-scope-and-sequencing.md`](research/REVIEW-product-scope-and-sequencing.md) — what the first playable actually is, G0–G5 gates, lock-in points, and the compact owner decision card.
+4. [`GREENLIGHT-CHECKLIST.md`](research/GREENLIGHT-CHECKLIST.md) — the choices to approve, prototype, defer, or reject without replying to 40 files individually.
+5. [`DEPENDENCY-MAP.md`](research/DEPENDENCY-MAP.md) — the acyclic G0–G5 path and the distinction between hard prerequisites, interface references, validation dependencies, and post-v1 coordination.
+6. [`FOUNDATION-00`](decisions/FOUNDATION-00-spec-risk-audit.md) — the original spec assumptions that were converted into testable requirements.
+7. The adversarial reviews: [architecture/networking](research/REVIEW-architecture-networking.md), [assets/modding/security](research/REVIEW-assets-modding-security.md), and [world/render/storage](research/REVIEW-world-render-storage.md), followed by the [independent document-integrity audit](research/REVIEW-document-integrity.md). The first two preserve their pre-integration findings; use their disposition tables with the integration log, not as descriptions of unedited current files.
+8. Individual briefs from the [complete decision index](decisions/README.md) when a recommendation or trade-off needs inspection.
+9. [`PROTOTYPE_PROGRAM.md`](research/PROTOTYPE_PROGRAM.md) only after reading the product sequence; it maps all long-term experiments and is intentionally broader than the first playable.
 
 ## Current integrated baseline
 
@@ -38,10 +39,10 @@ prototype interpretation; it does not claim a product decision has already been 
 - One live-world writer. Workers return bounded immutable revisioned proposals; stale results never publish.
 - SQLite WAL is the leading persistence candidate, not a foregone conclusion. Crash/disk/corruption/fault tests decide it before user worlds exist.
 - GNS is the first transport candidate, not the selected transport. Public direct IP is blocked on authenticated server identity/channel binding, admission, native ownership, lane behavior, and packaging.
-- Child-process and embedded singleplayer are host adapters around the same core; the packaged lifecycle comparison selects the default.
+- Supervised child-process singleplayer over loopback is the selected desktop default around the same core; embedded hosting remains a test/fallback adapter, not a second product topology.
 - First playable uses finite full-detail terrain, simple bounded meshing/materials, basic lighting, and ordinary fog. Far LoD and advanced visuals are later work.
-- `.vcpak` is resource-only. Future data packs, `.vcmod` Wasm components, and trusted native plugins are different artifact classes and parsers.
-- Native .NET plugins are unrestricted trusted code. Wasm is only a sandbox candidate after hostile validation, compilation, cache, capability, transaction, and platform tests.
+- `.vcpak` is resource-only and engine-agnostic. Resource packs form one explicit low-to-high overlay stack; whole assets replace rather than merge, with no dependency DAG.
+- There is one public extension ecosystem. Its sandbox runtime remains a candidate after hostile validation; native in-process code has no supported public-plugin compatibility promise.
 - “DDoS proof,” “cheating almost impossible,” literal infinite height, hash-based attestation, and a persistent 64³-per-block light field are rejected claims.
 
 ## First playable

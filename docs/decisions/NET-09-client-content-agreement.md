@@ -4,7 +4,7 @@ Status: Proposed
 
 ## Decision
 
-Recommended choice: Servers publish a canonical required-content lock manifest; cooperating clients locally verify and declare the selected package digests and sandbox ABI over an authenticated session, while native client plugins remain explicitly trusted/local and outside any safety guarantee.
+Recommended choice: Servers publish a canonical required-content lock manifest; cooperating clients locally verify and declare the selected package digests and, once selected, sandbox ABI over an authenticated session. There is no public native-client-plugin ecosystem; private native forks are outside the compatibility contract.
 
 One-sentence rationale: Content hashes give deterministic compatibility and local integrity for cooperating clients, but a hostile client can lie about possession or execution and remains subject to server authority.
 
@@ -38,8 +38,8 @@ Luanti exposes server restrictions for client-side mods but documents functional
 
 - `resource_pack`: `.vcpak`/`pack.json`; strict inert resource tree, though media parsers remain attack surface.
 - `data_pack`: future separate authoritative declarative-content contract owned with `GAME-01`.
-- `sandbox_component`: future `.vcmod`/`mod.json` standard Wasm component; no native/precompiled code.
-- `native_plugin`: unrestricted local/operator code in a distinct trusted installation path; never a remotely enforceable requirement.
+- `sandbox_component`: future public sandbox artifact. Wasm components and constrained Lua-family modules are candidates; the selected runtime must have no ambient authority.
+- `private_native_fork`: unrestricted local/operator code outside supported package resolution, compatibility, and safety guarantees; never a remotely enforceable requirement.
 
 These classes may share resolver vocabulary but never a permissive artifact parser, extension, or trust prompt. V1 content agreement can ship resource-pack locking before executable/data classes exist.
 
@@ -65,7 +65,7 @@ ContentLock {
   policy {
     extra_resource_packs
     extra_sandbox_components
-    native_plugins
+    private_native_forks // always ignored by the supported agreement
   }
   lock_sha256          // RFC 8785 canonical lock excluding this field
 }
@@ -83,15 +83,12 @@ ContentLock {
 
 Hash comparison is not remote attestation. A modified client can lie unless the protocol or platform supplies stronger attestation, which is outside v1. Server authority and validation remain mandatory.
 
-### Native plugin policy
+### Private native fork policy
 
-Supported server policies:
-
-- `forbid`: no native client plugins allowed for this connection according to the cooperating client;
-- `ignore`: server makes no claim about native client plugins;
-- `allowlist`: cooperating client reports only matching allowed IDs/hashes.
-
-None is an anti-cheat guarantee. A public server must assume the client binary can be modified. A server should not require downloading arbitrary native client code as a normal join step.
+Private native forks are not package classes in the supported agreement and are never
+reported, required, downloaded, or given an allowlist policy. A public server must
+assume the client binary can be modified regardless; content agreement is not
+anti-cheat.
 
 ### Distribution and signing
 
@@ -100,10 +97,10 @@ V1 verifies installed content and provides package IDs plus human-facing acquisi
 ## Greenlight criteria
 
 - Logical-map hashing and RFC 8785 lock encoding produce identical digests across supported platforms; literal artifact hashes remain separately named.
-- The lock resolver detects cycles, duplicate IDs, conflicting versions, and capability incompatibility.
+- The resource-pack profile resolver detects duplicate selected artifacts and malformed stack entries; future executable/data resolvers must separately reject cycles, duplicate IDs, conflicting versions, and capability incompatibility.
 - Join mismatches are actionable without leaking unrelated local mods.
 - Documentation explicitly separates integrity, publisher trust, sandbox safety, and anti-cheat.
-- Native .NET plugins are labeled unrestricted/trusted in every UI and manifest path.
+- Private native forks are kept outside supported UI, manifest, and join paths.
 
 ## Prototype or benchmark
 
@@ -118,7 +115,7 @@ Pass condition: canonical packages hash reproducibly; malformed archives are rej
 - A package repository/distribution service is a separate future security design.
 - SHA-256 collision risk is not the practical concern; canonicalization ambiguity and parser differentials are.
 - Cosmetic client-only resources may change geometry enough to affect fairness; server policy must decide whether they are free, allowlisted, or locked.
-- A future client/server sandbox artifact needs an explicit side/component contract; it cannot embed resource-pack or native-plugin payloads.
+- A future client/server sandbox artifact needs an explicit side/component contract; it cannot embed resource-pack or private-native-fork payloads.
 
 ## Dependencies
 
@@ -128,6 +125,6 @@ Pass condition: canonical packages hash reproducibly; malformed archives are rej
 ## Rejected or deferred alternatives
 
 - Treating matching hashes as anti-cheat: rejected.
-- Auto-downloading native code from arbitrary servers: rejected for v1.
+- Auto-downloading native code from arbitrary servers: rejected.
 - Full client mod inventory disclosure: rejected on privacy and necessity grounds.
 - Remote attestation: deferred beyond the current product scope.

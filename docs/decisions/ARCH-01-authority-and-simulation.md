@@ -12,6 +12,14 @@ Recommended choice: Use a server-authoritative, fixed-tick simulation that accep
 
 One-sentence rationale: This is the smallest model that makes invalid world, inventory, combat, and movement outcomes non-authoritative while keeping normal play responsive at Internet latency.
 
+### Owner decision — 2026-08-10
+
+The owner accepted option **D**. The concrete anti-cheat objective is that a client
+cannot produce impossible movement/state outcomes such as speed, timer, fly, noclip,
+teleport, or inventory/world mutations by lying in packets. This is deliberately not a
+claim to reliably detect aim assistance, macros, bots, or every modified client. See
+[`OWNER_DECISIONS.md`](../OWNER_DECISIONS.md#accepted-decisions).
+
 This decision deliberately replaces two overstatements in the current spec:
 
 - “Make movement cheats almost impossible just through good netcode” is not an achievable acceptance criterion. Authority prevents impossible state writes; it cannot reliably distinguish a skilled human from aim assistance, macros, pathfinding, information extracted from already-replicated chunks, or every timing exploit.
@@ -213,7 +221,10 @@ Failure means revising the movement state/input representation, world-revision c
 - High tick rates multiply simulation, history, bandwidth, and replay cost. No evidence here supports 128 Hz as a default.
 - Server-side rewind can improve fairness while enabling “shot behind cover” outcomes. That policy belongs in `NET-04`.
 - Server authority does not solve x-ray, bots, aim assistance, denial of service, compromised server plugins, or malicious native mods.
-- Gameplay-light requirements are currently unspecified. If the game has Minecraft-like spawning or growth rules, “fully client-side lighting” must be narrowed in the product spec.
+- Gameplay light is now specified as server-owned discrete 0–15 data for gameplay
+  rules. Its propagation must be scheduled, coalesced, and budgeted rather than solved
+  synchronously for every edit; `RENDER-04`, `WORLD-08`, and `GAME-02` own the exact
+  queue/cadence fixtures.
 
 ## Dependencies
 

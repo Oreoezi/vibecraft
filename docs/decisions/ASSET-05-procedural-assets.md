@@ -8,6 +8,13 @@ Recommended choice: Defer arbitrary runtime procedural assets. Treat the first b
 
 One-sentence rationale: Most procedural visual goals do not require executable code during gameplay, and precompilation preserves pack safety, reproducibility, startup time, batching, and renderer control.
 
+### Owner direction — 2026-08-10
+
+A UE-style material graph is desirable only as a future bounded, engine-neutral asset
+graph that compiles to VibeCraft-owned material templates. It must not accept custom
+GLSL/Godot shader source or become a general GPU programming language. This is a
+deferred format/rendering spike, not a v1 requirement.
+
 ## Context and constraints
 
 - The draft wants Perlin/noise-driven textures and possibly procedural materials.
@@ -33,9 +40,11 @@ Godot notes that resources/GPU operations from threads can synchronize and stall
 
 ## Proposed design
 
-### V1 generator graph
+### V1 authoring graph
 
-Generator source is declarative data with no loops, recursion, file paths outside namespaced inputs, or user code. Initial node allowlist:
+Generator/material source is declarative data with no loops, recursion, file paths
+outside namespaced inputs, user code, or arbitrary shader snippets. Initial node
+allowlist:
 
 - constants and color ramps;
 - deterministic seeded value/simplex-style noise implementations pinned by algorithm version;
@@ -44,7 +53,8 @@ Generator source is declarative data with no loops, recursion, file paths outsid
 - blend/mask/channel operations;
 - normal-map derivation from height;
 - tile/wrap and finite blur with a bounded radius;
-- outputs for albedo, normal, roughness/metallic/emission/opacity masks.
+- outputs for albedo, normal, roughness/metallic/emission/opacity masks and bounded
+  parameters of engine-owned material templates.
 
 Graph validation rejects cycles, excessive nodes, dimensions, samples, blur radius, referenced inputs, and output bytes. All math/quantization semantics and noise algorithms are versioned; the same graph/version/seed/input hashes must yield the same canonical output bytes on every supported build platform.
 
@@ -64,7 +74,7 @@ The authoring cache key includes generator-contract version, canonical graph byt
 
 Runtime and the normal pack loader never execute or need the source graph. Generated output is loaded like any other texture. Authoring-tool diagnostics report source node and dependency chains for failures.
 
-### Runtime effects
+### Runtime effects and future material graph
 
 Moving water/lava, portals, wind, shimmer, and simple noise variation use engine-owned material templates with bounded parameters and textures. Packs may select a template and values but may not inject arbitrary shader source in the default trust tier.
 
@@ -77,7 +87,10 @@ Potential built-in templates:
 - deterministic per-instance tint/phase;
 - portal/refractive effect selected by renderer capability.
 
-Custom shaders belong to a trusted developer tier or a future separately reviewed shader DSL/capability—not to “resource pack” by default.
+The eventual material graph compiles only to a finite set of VibeCraft template
+variants; its graph nodes must map to documented portable parameters, not emitted GPU
+source. Custom shaders belong to a private fork or a future separately reviewed shader
+DSL/capability—not to a resource pack by default.
 
 ### Gameplay and networking
 

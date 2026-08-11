@@ -11,6 +11,9 @@ One-sentence rationale: This preserves Godot's productive high-level features wi
 ## Context and constraints
 
 - The client uses Godot with C#.
+- Godot was chosen primarily for its open-source licensing, and the team has limited
+  Godot experience. Godot-specific APIs and workflow assumptions therefore remain
+  benchmark/prototype-gated rather than becoming architecture folklore.
 - Terrain is dynamic, streamed, and potentially thousands of visible sections.
 - CPU generation/lighting/meshing should be parallel; Godot APIs have thread restrictions.
 - Far terrain, advanced materials, and a possible native hot-path implementation must remain future options.
@@ -106,6 +109,11 @@ Generate a synthetic moving-camera scene with editable sections and compare:
 3. batched repeated props with spatially partitioned `MultiMesh`.
 
 Measure frame CPU, upload spikes, draw calls, culling, memory, C# allocations/interop, and unload cleanup at increasing view distances. Inject rapid repeated edits to verify stale-job rejection and bounded uploads. Move the render origin across a threshold while edits and entity interpolation continue.
+
+The spike must also validate the actual developer workflow: editor/project setup,
+headless test execution, C# debugging/profiling, asset publication, and exported
+Windows/Linux builds. The open-source licensing rationale is accepted; this workflow
+evidence decides whether the selected Godot adapter is pleasant enough to retain.
 
 ## Risks and open questions
 

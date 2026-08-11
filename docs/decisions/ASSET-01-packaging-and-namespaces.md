@@ -12,6 +12,13 @@ Recommended choice: Distribute a VibeCraft resource pack as a standard ZIP conta
 
 One-sentence rationale: ZIP and familiar source formats keep packs authorable and inspectable, while a native resolver, strict canonical paths, bounded streaming validation, and a separate compiled cache avoid inheriting Godot or Minecraft path semantics as VibeCraft's permanent API.
 
+### Owner decision — 2026-08-10
+
+ZIP-based `.vcpak` plus unpacked development directories is accepted. The pack contract
+must stay engine-agnostic: Godot imports/caches are private implementation products,
+not an asset requirement. Minecraft import is best-effort offline tooling supplied
+without any promise of fidelity or even a usable result for a given source pack.
+
 This decision makes three boundaries explicit:
 
 - `.vcpak` is a distribution container, not an executable module and not a Godot project overlay.
@@ -24,9 +31,11 @@ This decision makes three boundaries explicit:
 - Packs need textures, sounds, localization, static block models, animated entity/block-entity models, and future material/procedural descriptors.
 - The Godot/C# client must load untrusted data without letting a pack replace arbitrary `res://` files, load assemblies, escape an archive path, or force unbounded allocation/decompression.
 - Pack identity must be stable across Windows and Linux despite filesystem case and Unicode behavior.
-- Overrides, dependencies, compatibility, and lock manifests are defined by `ASSET-02`; this document defines what can be mounted and addressed.
+- Ordered overlays, compatibility, and lock manifests are defined by `ASSET-02`; this document defines what can be mounted and addressed.
 - Visual formats must not become authoritative gameplay formats. Collision, light emission used by gameplay, registry state, and server behavior are outside a resource pack.
-- V1 should remain debuggable with normal ZIP/JSON/PNG/GLB tools and should not require the Godot editor to author a pack.
+- V1 should remain debuggable with normal ZIP/JSON/PNG tools and should not require
+  the Godot editor to author a pack. The native model/rig source format is a separate
+  open format spike, not a Godot import format.
 
 ## Options considered
 
@@ -35,7 +44,7 @@ This decision makes three boundaries explicit:
 | Loose directories only | Excellent authoring and hot reload; trivial inspection | Poor distribution integrity; filesystem case/symlink behavior leaks into identity; many-file install overhead | Developer mode only |
 | **Standard ZIP plus directory-equivalent layout** | Familiar tools, compression, one distributable file, streamable entries, same authoring tree | Requires strict path/size validation and a custom resolver; ZIP metadata itself is not reproducible | **Recommended** |
 | Godot PCK/ZIP mounted into `res://` | Uses Godot's virtual filesystem and imported resources | Later packs can replace same-path project resources; ties pack creation to Godot imports and engine internals; weak package isolation | Rejected for untrusted/native packs; acceptable only for first-party DLC outside this contract |
-| glTF/GLB as the entire pack | Good standardized 3D delivery, single-file geometry | Does not model sounds, localization, package dependencies, block-state selection, override policy, or all voxel materials | Use GLB as one asset type, not the container |
+| glTF/GLB as the entire pack | Good standardized 3D delivery, single-file geometry | Does not model sounds, localization, stack policy, block-state selection, override policy, or all voxel materials | Reject as the native pack/model contract; may remain offline authoring input only if a later tool needs it |
 | Custom monolithic binary bundle | Fast indexed reads and complete layout control | New tooling and migration burden; opaque to creators; platform formats easily leak into the contract | Defer; the cache can use private binary formats |
 | Content-addressed object store as distribution | Deduplication and patching | Complex publication, garbage collection, signatures, and author UX before a repository exists | Possible future distribution layer, not the pack format |
 
@@ -109,12 +118,10 @@ assets/<namespace>/
   sounds/<path>.ogg
   fonts/<path>.woff2               first-party only until parser/UI-spoof tests pass
   locale/<locale>.json
-  geometry/<path>.glb
   models/<path>.model.json
   materials/<path>.material.json
   block_visuals/<path>.block-visual.json
   entity_visuals/<path>.entity-visual.json
-  animation_graphs/<path>.animgraph.json
 ```
 
 New top-level directories or executable/library formats require a future package-schema revision. Source files such as `.blend`, `.psd`, build scripts, DLLs, nested ZIPs, Godot `.tscn/.tres/.res`, and arbitrary shaders are not loadable pack entries. Authors keep those beside the pack source project, not in the distributed package. Procedural-asset declarations, if greenlit by `ASSET-05`, receive an explicit non-executable asset kind rather than hiding code in this tree.
@@ -132,15 +139,18 @@ public readonly record struct AssetName(string Namespace, string Path);
 
 The text form of `AssetName` is `namespace:path/to/name`. The typed field containing a reference supplies `AssetKind`, so `acme:block/stone` can independently name a texture and a material without collision. Diagnostics print both, for example `texture acme:block/stone`.
 
-Physical mapping is fixed by kind. For example:
+Physical mapping is fixed for selected asset kinds. The public model/rig source
+format is intentionally not fixed until the `ASSET-03` format spike; it must not be
+implicitly inferred as GLB from a path. For example:
 
 ```text
 texture acme:block/stone  -> assets/acme/textures/block/stone.png
 model   acme:block/stone  -> assets/acme/models/block/stone.model.json
-geometry acme:mob/boar    -> assets/acme/geometry/mob/boar.glb
 ```
 
-Package IDs and namespace ownership are separate. Package `example.high_res` might own namespace `example` and explicitly overlay selected assets in namespace `vibecraft`; merely writing into another namespace does not grant an override.
+Package IDs and asset namespaces are separate. A later profile entry may define an
+asset in any namespace; `ASSET-02` makes explicit stack position, not hidden namespace
+ownership or a dependency declaration, the whole-asset precedence rule.
 
 Canonical names obey all of these rules:
 
@@ -176,10 +186,18 @@ public interface IAssetSnapshot
 
 Resource loading has two phases:
 
-1. **Headless validation/compilation:** parse manifests/descriptors, resolve references, validate the enabled media subset, and produce plain CPU-side compiled artifacts on bounded cancelable workers. GLB is experiment-gated; custom WOFF2 remains first-party-only until its parser and UI-spoof corpus pass.
+1. **Headless validation/compilation:** parse manifests/descriptors, resolve the ordered
+   profile stack, validate the enabled media subset, and produce plain CPU-side
+   compiled artifacts on bounded cancelable workers. The native model/rig format is
+   experiment-gated; custom WOFF2 remains first-party-only until its parser and
+   UI-spoof corpus pass.
 2. **Godot publication:** on the permitted client thread, create textures, meshes, materials, audio streams, and animation resources from those artifacts.
 
-No asset parser receives filesystem authority, resolver enumeration, a Godot scene tree, network access, or an authoritative world handle. Original untrusted GLB is never passed to broad Godot scene generation; the validator/compiler emits owned plain arrays/tables for a narrow publication adapter. A failed new snapshot leaves the previous snapshot active.
+No asset parser receives filesystem authority, resolver enumeration, a Godot scene
+tree, network access, or an authoritative world handle. Original untrusted model bytes
+are never passed to broad Godot scene generation; the validator/compiler emits owned
+plain arrays/tables for a narrow publication adapter. A failed new snapshot leaves the
+previous snapshot active.
 
 ### Archive and parser security policy
 
@@ -193,7 +211,7 @@ V1 loader defaults are intentionally finite:
 | Total declared uncompressed bytes | 2 GiB | Reject with checked arithmetic |
 | One JSON descriptor | 8 MiB, depth 64 | Reject before/schema parse |
 | One path | 240 bytes; 64 bytes/component | Reject during index build |
-| One GLB | 128 MiB within the entry cap | Reject before model parse |
+| One model/rig payload | 128 MiB within the entry cap | Reject before model parse |
 | One decoded texture | 8192×8192 and 256 MiB | Reject before GPU publication |
 
 These are client policy defaults, not promises that every valid-looking pack will fit every GPU. A future engine release may raise hard limits; a pack cannot ask the loader to weaken them. Server-required packs must fit the public default profile unless protocol negotiation explicitly selects another profile.
@@ -204,7 +222,7 @@ Validation order prevents expensive work on already-invalid input:
 2. canonicalize every name and reject duplicates/non-regular entries;
 3. stream and hash every entry with cancellation and exact output bounds;
 4. parse the manifest with duplicate JSON-property rejection and a fixed maximum depth;
-5. resolve the package graph and allowed overrides;
+5. resolve the explicit ordered profile stack and whole-asset winners;
 6. parse type-specific descriptors and references;
 7. decode/compile heavy media under per-asset and aggregate work budgets;
 8. publish an immutable snapshot only after every required asset succeeds.
@@ -249,7 +267,7 @@ Every rejection reports:
 - package ID/version when the manifest was readable;
 - canonical source path or redacted raw path;
 - limit/expected/actual values where safe;
-- override origin and dependency chain when relevant.
+- override origin and profile-stack position when relevant.
 
 Diagnostics never log archive entry contents or secrets. A failed user pack is disabled and the previous valid profile remains active. A missing/invalid required base or server-locked pack prevents world entry with an actionable content-repair screen; it does not silently substitute gameplay-significant geometry.
 

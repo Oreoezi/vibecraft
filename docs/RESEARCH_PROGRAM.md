@@ -61,7 +61,7 @@ The first-playable experiments should measure, rather than assume:
 - 20 Hz prediction/reconciliation around authoritative block edits;
 - transport behavior under latency, loss, duplication, reordering, churn, malformed
   admission, and bounded congestion;
-- child-process versus embedded hosting in packaged builds;
+- selected child-process loopback hosting in packaged builds, with the embedded adapter retained for conformance/fallback tests;
 - bounded chunk streaming, meshing, upload/disposal, and renderer ownership;
 - strict loading, identity, and reproducibility of one resource-only base pack.
 

@@ -14,6 +14,15 @@ One-sentence rationale: Block-scale propagation preserves readable Minecraft-lik
 
 This does **not** greenlight “fully client-side lighting” as an authority rule. The client owns visual shading, but the server owns every gameplay decision involving light. Both sides may run the same deterministic low-resolution solver; a resource pack may change appearance but never whether mobs spawn, crops grow, or a block counts as lit.
 
+### Owner decision — 2026-08-10
+
+Gameplay light remains Minecraft-like discrete server state, but propagation is not a
+synchronous side effect of every block edit. Authoritative edits enqueue coalesced,
+revisioned light invalidations; the world scheduler processes bounded work at a named
+phase. A piston/redstone spam may create visible/gameplay-light backlog, but it may not
+turn one edit into unbounded server work. Exact cadence, caps, and regional escalation
+remain a benchmark gate.
+
 ## Context and constraints
 
 - The world is editable, streamed in sparse cubic sections, and has no small fixed vertical ceiling.
@@ -138,6 +147,15 @@ public sealed record LightSolveResult(
 ```
 
 This API states ownership and dependencies, not the final flood-fill optimization. Start with a bucketed multi-source queue over levels 15→1; add incremental removal/addition queues only after randomized equivalence tests against full recomputation.
+
+On the server, `LightSolveRequest` enters a deterministic `GameplayLight` work queue
+keyed by affected section/region and target content revision. Repeated edits coalesce
+to the newest revision before solve; a stale solve cannot publish. Each `WorldTick`
+reserves a bounded cell/work budget for light after accepted block changes and before
+rules that consume the resulting revision. Large or churn-heavy regions promote to one
+bounded regional recomputation rather than one flood fill per edit. Until a result
+commits, light-dependent rules read the last committed light revision and diagnostics
+report the debt; they never trust a client or invent prospective light.
 
 ### 3. Solve unbounded-height skylight explicitly
 

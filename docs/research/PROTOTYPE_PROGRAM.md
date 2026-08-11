@@ -60,7 +60,7 @@ Minimum pass conditions:
 
 Answers: `ARCH-01`, `ARCH-04`, `NET-01`, `NET-02`, `NET-03`, `NET-04`, `NET-06`, `NET-07`, `NET-08`.
 
-Build one shared voxel movement kernel, host-agnostic `ServerCore`, Godot client, observer/bot client, child-loopback and embedded host adapters, and deterministic network impairment proxy. Use a tiny editable world; do not add broad content. Start with one 20 Hz `WorldTick`; GNS and the child host are candidates, not prerequisites.
+Build one shared voxel movement kernel, host-agnostic `ServerCore`, Godot client, observer/bot client, supervised child-loopback host, embedded conformance/fallback adapter, and deterministic network impairment proxy. Use a tiny editable world; do not add broad content. Start with one 20 Hz `WorldTick`; GNS remains a transport candidate, while the child host is the selected Windows/Linux desktop direction.
 
 Required behaviors:
 
@@ -88,7 +88,7 @@ Decision outputs:
 - whether 20 Hz prediction passes; only a failure unlocks an exactly nested 40 Hz controller branch;
 - movement correction thresholds/smoothing;
 - current-time block policy; combat rewind and support grace remain independent disabled experiments;
-- child versus embedded singleplayer topology;
+- child-loopback lifecycle acceptance and embedded-adapter protocol/authority conformance;
 - exact overload and resync behavior.
 
 Minimum pass conditions:
@@ -140,9 +140,9 @@ Answers: `ASSET-01` through `ASSET-05`, `NET-09`.
 Build a **resource-only** `.vcpak` offline/runtime toolchain before executable or data artifact classes:
 
 - canonical manifest and archive validation;
-- namespaced paths, dependencies, deterministic override resolution;
+- namespaced paths, explicit low-to-high profile stacks, and deterministic whole-asset override resolution;
 - reproducible package/content hashes;
-- PNG/audio plus glTF model/animation import into versioned caches;
+- PNG/audio plus profile-compatible first-party model fixtures; native voxel model/rig source format remains a separate bounded spike;
 - block/model/material validation and fallbacks;
 - texture animation without remeshing;
 - toy Minecraft visual-pack converter with a conversion report;
@@ -152,8 +152,8 @@ Build a **resource-only** `.vcpak` offline/runtime toolchain before executable o
 Security corpus:
 
 - traversal, absolute paths, duplicate/case-colliding paths, symlinks if applicable;
-- compressed bombs, huge counts/dimensions, malformed PNG/glTF, external URIs;
-- unsupported extensions, NaN transforms, cyclic hierarchies/dependencies;
+- compressed bombs, huge counts/dimensions, malformed PNG and any optional offline-import source, external URIs;
+- unsupported extensions, NaN transforms, cyclic hierarchies, duplicate stack entries, and invalid whole-asset replacement;
 - reordered archive entries/timestamps and one-byte content changes.
 
 Minimum pass conditions:
