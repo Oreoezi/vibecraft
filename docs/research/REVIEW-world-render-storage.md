@@ -8,7 +8,7 @@ Scope: current `WORLD-01..09`, `RENDER-01..07`, `ARCH-02/03`, `GAME-01/02`, and 
 
 This review is about the **current integrated files**, not the first-wave drafts. Immediately before this file was written, the repository contained 60 Markdown files, 13,650 lines, and 1,212,247 bytes; the SHA-256 of the sorted per-file SHA-256 listing was `85b1d2b49c7377a1a505f207b8d96e658bb369631c18203dd08f99809dd2c24e`.
 
-The earlier integrity audit recorded 58 Markdown files and 13,290 lines at 21:10:27 +03:00. Several first-wave findings have since been corrected: canonical coordinates are signed 64-bit and 3D; render-local `Vector3I` is explicitly checked/noncanonical; `SectionSide` is again an experiment; and 20 Hz now owns the v1 authority clock. Treat old reviews as dated evidence, not descriptions of the current tree.
+The earlier integrity audit recorded 58 Markdown files and 13,290 lines at 21:10:27 +03:00. Several first-wave findings had been corrected when this review was written: canonical coordinates are signed 64-bit and 3D; render-local `Vector3I` is explicitly checked/noncanonical; and `SectionSide` is again an experiment. The later owner review in `questions2.md` superseded this snapshot's 20 Hz clock with fixed 60 TPS, set an approximately 10,000-block initial build range, and promoted minimal fog-obscured far terrain to a post-first-playable v1 gate. Treat numeric/current-state claims below as dated evidence unless repeated in the current baseline.
 
 No new browsing was performed for this deadline pass. SQLite conclusions below rely on the primary SQLite sources already captured in `WORLD-03/04`. Claims not rechecked are marked experiment-gated or unresolved.
 

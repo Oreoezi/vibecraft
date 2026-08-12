@@ -8,13 +8,20 @@ Related spec: [`../../design_doc.md`](../../design_doc.md)
 
 ## Decision
 
-Recommended choice: Run authoritative world gameplay on one deterministic 20 Hz simulation thread per world, activate resident chunks through explicit block-ticking and entity-ticking tiers, store block/fluid ticks in bounded ordered per-chunk schedulers, and keep generation, storage, meshing, and carefully validated read-only computations parallel while deferring parallel live chunk ticking.
+Owner-selected choice: Run authoritative world gameplay on one deterministic **60 TPS**
+simulation thread per world, activate resident chunks through explicit block-ticking
+and entity-ticking tiers, store block/fluid ticks in bounded ordered per-chunk
+schedulers, and keep generation, storage, meshing, and carefully validated read-only
+computations parallel while deferring parallel live chunk ticking.
 
 One-sentence rationale: A fixed single-writer tick gives early-Minecraft-like mechanics, reproducible ordering, safe plugin semantics, and a credible first implementation; Folia-style parallel regions are an architectural migration, not a worker-pool toggle.
 
 This decision explicitly challenges two requirements in the current spec:
 
-1. “32/64/128 server ticks” is rejected as a v1 authoritative profile menu. `NET-06` owns measured input/snapshot packet cadence, not another simulation clock. Minecraft-like gameplay is designed around a 20 Hz game clock; running the whole world at 128 Hz multiplies work and changes delays by 6.4x unless every rule is rescaled.
+1. “32/64/128 server ticks” is rejected as a v1 profile menu. The owner selected a
+   fixed 60 TPS world clock. `NET-06` owns measured input/snapshot packet cadence, not
+   another simulation clock; Minecraft-inspired durations are converted by elapsed
+   time rather than copied as raw 20 TPS tick counts.
 2. “Threaded chunk ticking” is overambitious for the first playable release. Correct parallel live mutation requires region ownership, cross-region message ordering, migration, plugin restrictions, and deterministic conflict rules. Parallel materialization from `WORLD-02` is approved; parallel authoritative mutation is deferred until profiling proves it necessary.
 
 ## Context and constraints
@@ -34,7 +41,7 @@ This decision explicitly challenges two requirements in the current spec:
 | Option | Strengths | Costs/risks | Fit for VibeCraft |
 | --- | --- | --- | --- |
 | A. Tick all loaded chunks in parallel at configurable 32/64/128 Hz | Superficially matches the spec; high update frequency on powerful machines | Changes Minecraft-like timing, multiplies cost, races cross-chunk effects, makes plugin/thread safety and deterministic replay extremely difficult | Reject |
-| B. One 20 Hz simulation writer, capability tiers, deterministic bounded schedulers | Smallest correct architecture; stable ordering; easy replay and persistence; compatible with parallel I/O/worldgen | One world eventually reaches a single-thread CPU ceiling; slow callbacks can stall it | **Recommend** |
+| B. One 60 TPS simulation writer, capability tiers, deterministic bounded schedulers | One responsive replay/commit grid; stable ordering; compatible with parallel I/O/worldgen | 16.67 ms capacity and one-world single-thread ceiling; slow callbacks can stall it | **Owner selected** |
 | C. Folia-style independent region tick loops with strict ownership | Real multicore live simulation for geographically separated players | Region merge/split, entity migration, cross-boundary messages, global systems, plugin APIs, and debugging become much more complex | Defer behind profiling gate |
 | D. Parallel per-system snapshot jobs returning command buffers to one commit thread | Can accelerate selected AI/pathfinding or broad read-only scans while retaining one writer | Snapshot cost, stale results, deterministic conflict resolution, and one-tick latency | Permit only case-by-case after the base loop is measured |
 
@@ -51,7 +58,10 @@ Minecraft's source is not published as a normal open-source repository. Mapped c
 - Paper's official server documentation says `simulation-distance` controls the radius in which living entities are updated, while its Spigot configuration documents entity activation ranges outside which entities tick less often. Paper also exposes per-world ticking and autosave controls. ([Paper server properties](https://docs.papermc.io/paper/reference/server-properties/), [Paper entity activation configuration](https://docs.papermc.io/paper/reference/spigot-configuration/), [Paper world configuration](https://docs.papermc.io/paper/reference/world-configuration/))
 - Community-maintained Minecraft documentation records the long-standing target of 20 game ticks per second and a 65,536 scheduled block/fluid tick processing ceiling. It also records that Java 1.21.5 changed random-tick reach to follow simulation distance for blocks, while some systems retained different ranges. These details show that activation policy has evolved independently of the base 20 Hz clock. ([community tick documentation](https://minecraft.fandom.com/wiki/Tick), [community Java 1.21.5 notes](https://minecraft.wiki/w/Java_Edition_1.21.5))
 
-Inference for VibeCraft: copy the semantic shape—20 Hz logical time, capability tiers, ordered persisted scheduled ticks, and a deterministic work ceiling—not undocumented Java quirks or the full ticket implementation. Exact redstone compatibility needs gameplay tests, not architecture folklore.
+Inference for VibeCraft: copy the semantic shape—one fixed logical clock, capability
+tiers, ordered persisted scheduled ticks, and a deterministic work ceiling—not
+Minecraft's 20 TPS value, undocumented Java quirks, or the full ticket implementation.
+Exact redstone timing is expressed in elapsed time on VibeCraft's 60 TPS grid.
 
 ### Folia and Paper
 
@@ -87,7 +97,11 @@ Lesson: phase/system decomposition and ordered events are extensible, but “eve
 
 ### Clock and overload semantics
 
-- `WorldTick` is a persisted unsigned 64-bit logical counter advancing at a fixed **20 Hz** (`50 ms` nominal duration). Gameplay delays are expressed in world ticks, not milliseconds.
+- `WorldTick` is a persisted unsigned 64-bit logical counter advancing at a fixed
+  **60 TPS** (`1/60 s`, approximately `16.67 ms`). Clock arithmetic treats that delta
+  as a rational value rather than repeatedly adding a rounded nanosecond constant.
+  Persisted due ticks remain exact on this fixed grid; authored durations convert by a
+  versioned rounding rule.
 - A monotonic clock drives an accumulator. The loop may execute at most three catch-up ticks consecutively before yielding to network/I/O completions. It never skips a logical world tick; if permanently overloaded, game time runs slow and the server reports tick debt rather than changing simulation results based on wall time.
 - At increasing debt, pause pregeneration/prefetch, reduce optional network work, suppress non-authoritative diagnostics, and expose overload. Do not drop scheduled gameplay operations, randomize ordering, or run multiple world ticks concurrently.
 - Network receive remains asynchronous. Inputs are stamped and consumed at a tick boundary. `NET-06` begins with no more than one input bundle and one coalescible snapshot per world tick; extra packets never advance movement commits, world AI, redstone, fluids, or block time.
@@ -245,7 +259,12 @@ Bitwise cross-platform floating-point replay is not promised by this brief. Bloc
 - One million scheduled block/fluid ticks spread across active and inactive chunks execute in exact `(due, priority, sequence, chunk key)` order subject to caps, survive save/reload, and are neither duplicated nor lost.
 - An inactive chunk receives no random, AI, physics, or ordinary block-entity ticks. On reactivation, overdue scheduled ticks drain under budget without replaying missed random/AI ticks.
 - A sustained update storm carries deterministic backlog without exceeding queue/memory caps or overflowing the call stack; a capacity failure is surfaced to the initiating transaction or built-in invariant handler.
-- In a fixture with eight separated players, simulation distance six, 200 simple entities per player, default random tick speed, and representative block entities, phase work remains below 50 ms p99 for 30 minutes on the declared baseline server. If `WORLD-01` makes this fixture unrealistic, replace it before greenlight with an equally explicit capacity target.
+- In a fixture with eight separated players, simulation distance six, 200 simple
+  entities per player, default random tick speed, and representative block entities,
+  total authoritative step CPU remains below the 16.67 ms cadence at p99 for 30
+  minutes with recorded headroom on the declared baseline server. If `WORLD-01` makes
+  this fixture unrealistic, replace it before greenlight with an equally explicit
+  capacity target.
 - Tick debt, not state loss, is observed when the fixture is intentionally overloaded; optional generation/prefetch is shed before authoritative operations.
 - Static analysis/tests prove no Godot object, resident mutable chunk, entity store, or plugin callback is accessed from generation, storage, or read-only worker jobs.
 
@@ -264,11 +283,17 @@ Success metrics:
 - Inject a one-million-entry scheduled backlog and a self-propagating immediate-update fixture. Memory remains charged/bounded, no operation disappears, and unrelated chunks make progress according to documented ordering.
 - Measure candidate read-only parallel pathfinding/AI snapshots separately. Adopt one only if end-to-end tick p95 improves by at least 20% at target load and stale-result rate remains below 5%; otherwise keep it serial or deferred.
 
-Failure rule: Any replay mismatch, lost due operation, mid-phase ownership violation, unbounded queue, or inability to meet the declared 20 Hz capacity fixture blocks greenlight; it does not justify silently relaxing ordering or memory guarantees.
+Failure rule: Any replay mismatch, lost due operation, mid-phase ownership violation,
+unbounded queue, or inability to meet the declared 60 TPS capacity fixture blocks
+greenlight; it does not justify silently relaxing ordering, memory guarantees, or the
+clock rate.
 
 ## Risks and open questions
 
-- The product owner must explicitly accept one 20 Hz v1 `WorldTick` and measured packet cadence. Keeping “128 Hz everything” would require a future architecture decision that rescopes gameplay timing, CPU capacity, plugin APIs, persistence tests, and probably the single-writer decision.
+- The owner has selected one fixed 60 TPS v1 `WorldTick`. The remaining gate is
+  capacity and correctness evidence, not another rate choice. Any future rate change
+  requires a compatibility/architecture decision covering gameplay timing, CPU,
+  plugins, persistence, and prediction.
 - “Early Minecraft 1.0-ish” is not a precise redstone/fluid/tick compatibility target. Modern Java evidence informs architecture but does not prove old-version event order. `GAME-02` needs black-box fixtures against the selected reference version.
 - Count budgets preserve determinism but cannot guarantee wall-clock duration if one block, entity, or plugin callback is expensive. Built-ins need bounded complexity; plugins need watchdogs, quotas, and disable policy under `ARCH-05`.
 - Carrying overdue work preserves state but can produce gameplay lag or starvation. The prototype may need deterministic fair interleaving by chunk while retaining priority/order guarantees; any change becomes part of compatibility semantics.

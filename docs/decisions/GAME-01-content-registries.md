@@ -10,14 +10,29 @@ Related spec: [`../../design_doc.md`](../../design_doc.md)
 
 Recommended choice: Use typed, frozen, namespaced content registries; represent ordinary block variation as finite canonical block states; persist a never-reused world-local `uint32` for each state alongside its canonical name/properties; and build a separate dense session mapping for runtime and network use.
 
-One-sentence rationale: Names survive pack order and software updates, compact integers keep voxel arrays fast, and an explicit saved mapping preserves unknown content instead of turning a missing mod into air or a different block.
+One-sentence rationale: Names survive pack order and software updates, compact integers keep voxel arrays fast, and an explicit saved mapping diagnoses required-content mismatches without ever reinterpreting a missing mod as air or a different block.
+
+### Owner decision — 2026-08-13
+
+Normal gameplay does not open a gameplay-modded world unless its required mod/content
+lock is present and compatible. Missing content fails before section activation with
+an exact report. Preservation placeholders remain a recovery/export mechanism, not a
+way to continue playing a partially defined world.
+
+World-local state IDs remain `uint32`. Each typed registry has its own ID domain and
+mods receive ordinary world-local allocations tied to namespaced keys, so a fragile
+global “mod ID range” is unnecessary. Reserve only explicit engine sentinel/version
+ranges. Per-position custom data belongs in sparse block-entity/component records,
+not alongside every dense block-state index; the exact general component payload can
+wait until a real gameplay feature needs it.
 
 This is not a Minecraft compatibility layer. Minecraft-like names, tags, recipes, and state properties are useful authoring concepts, but VibeCraft owns its schemas and migration rules. Java 1.0-era numeric IDs and metadata are specifically the history not to repeat.
 
 ## Context and constraints
 
 - A section contains 4,096 ordinary block states and cannot store strings or objects per voxel.
-- Saves may outlive engine releases and may be opened while an optional mod is missing.
+- Saves may outlive engine releases, but a world requiring gameplay mods must refuse
+  normal simulation while any required provider is missing or incompatible.
 - Dedicated servers and clients need an agreed content set, but numeric registration order is not stable enough to be a save or protocol identity.
 - Blocks, items, entities, block entities, biomes, recipes, tags, structures, and generator components have different schemas and must not share one untyped integer namespace.
 - `ARCH-02` requires dense block arrays plus sparse block entities. Arbitrary per-position property dictionaries would break that split.
@@ -31,7 +46,7 @@ This is not a Minecraft compatibility layer. Minecraft-like names, tags, recipes
 | Hard-coded global numeric IDs and metadata bits | Small and fast; resembles early Minecraft | IDs collide, metadata exhausts quickly, load order leaks into saves, renames require global rewrites | Reject |
 | Store canonical strings/property maps in every voxel | Durable and inspectable | Catastrophic repetition, larger network/disk data, slow hot-path comparison | Reject |
 | Assign numeric IDs from mod load order and save only numbers | Fast runtime and simple bootstrap | A reordered or missing mod can reinterpret every persisted number | Reject |
-| Canonical names + saved world IDs + disposable session IDs | Stable identity, compact sections, missing-content preservation, independently optimizable transport | Three mappings and explicit migration tooling | **Recommend** |
+| Canonical names + saved world IDs + disposable session IDs + strict world content lock | Stable identity, compact sections, exact startup diagnostics, independently optimizable transport | Three mappings, explicit migration tooling, and no partial gameplay open | **Owner selected** |
 | Content-address every definition and make the hash its identity | Detects every definition change | Cosmetic/balance edits become new identity; references and authoring are hostile; hash changes do not explain migration | Use hashes for agreement/provenance, not identity |
 
 ## Evidence
@@ -71,6 +86,10 @@ SessionStateId     dense uint32 for one connection     negotiated network encodi
 - Keys are unique only inside a typed registry. `vibecraft:oak` may legally identify both a block and an item, but every serialized reference includes or implies its registry kind.
 - A block-state key is the block key plus every declared property in property-name order. Defaults are expanded before identity is calculated; two spellings cannot denote the same state.
 - `WorldStateId` is allocated monotonically in `block_state_registry`, never reused, and remains bound to the same canonical state for that world's lifetime. `0` is reserved for `vibecraft:air`; maximum value is a hard world-format exhaustion condition, not wraparound.
+- Each typed registry owns a separate `uint32` domain. Engine sentinels and future
+  format-reserved values are explicit; base and mod content otherwise use the same
+  namespaced allocation path, so discovery order and a fixed global mod band cannot
+  become compatibility semantics.
 - `RuntimeStateId` and `SessionStateId` may be rebuilt. Neither appears in a durable record, replay log, plugin-owned data, or administrative API.
 - Persisted item/entity/biome references use canonical keys initially; add world-local integer maps only for a measured hot/dense record family. Do not create numeric IDs merely for symmetry.
 
@@ -157,14 +176,20 @@ RecipeDefinition
 - A client may propose `recipeKey` and slot revisions. The authoritative server reruns the matcher, validates ownership/counts, and commits consumed inputs plus outputs as one inventory transaction.
 - In-progress processing stores the recipe key, content fingerprint/definition version, elapsed ticks, and reserved inputs. Missing or changed recipes pause with preserved input rather than converting or deleting it silently.
 
-### Persistence, networking, and missing content
+### Persistence, networking, and required content
 
 - `block_state_registry(state_id, canonical_name, canonical_properties, definition_version, definition_crc32c)` is authoritative for world IDs. Reconciliation inserts newly used states transactionally and verifies every existing binding before sections load.
 - Section palettes store `WorldStateId`. Save/network codecs resolve through immutable mapping snapshots; they never call a mutable global registry during worker execution.
 - On connection, `NET-09` first verifies required content manifests. The server then sends or selects a versioned `SessionRegistryMap`; chunk palettes use session IDs only after that map is acknowledged.
 - A known canonical state with a changed definition is not automatically a new block. Its content package must declare compatibility or a migration; the world records the resolved content fingerprint.
-- An unresolved block state becomes `MissingBlockState(original key, properties, saved definition metadata)`: conservative solid full-cube collision, opaque rendering placeholder, no drops, no ticking, and admin-only replacement/export. It is never air.
-- An unresolved item remains an inert stack carrying its original key/components. An unresolved block entity/entity remains a bounded dormant record. Reinstalling a compatible provider resolves it without changing its persistent ID.
+- Before normal world open, compare the saved required gameplay-content lock with the
+  resolved server set. Any missing/mismatched required provider aborts open before
+  section activation, player admission, migration callbacks, or save writes.
+- A separate explicit recovery/export tool may decode an unresolved block as
+  `MissingBlockState(original key, properties, saved definition metadata)` and retain
+  unresolved item/entity/block-entity payloads under strict bounds. This mode does
+  not run simulation and cannot overwrite the world unless an explicit migration or
+  destructive cleanup workflow creates a verified backup.
 - Unknown payloads are length/checksum/schema bounded as required by `WORLD-04`. Missing content never grants execution of stored code or trusts saved collision/behavior callbacks.
 
 ### Renames and migrations
@@ -172,7 +197,9 @@ RecipeDefinition
 - Aliases are migration declarations with source key, destination key, source version range, payload transform ID, and owning namespace. They are not permanent fuzzy lookups.
 - One-to-one no-payload renames may migrate lazily through `WORLD-09`; state/property changes require an explicit deterministic transform and fixtures.
 - A mod can migrate only keys/payloads in its namespace. Cross-namespace takeover requires an owner-approved world migration manifest.
-- Removing content without replacement leaves placeholders. Destructive cleanup is a separate admin operation with a verified backup and report.
+- Removing content without replacement leaves unresolved recovery records and keeps
+  normal gameplay open blocked. Destructive cleanup is a separate admin operation
+  with a verified backup and report; it never silently turns missing content into air.
 
 ### Public interfaces
 
@@ -203,7 +230,10 @@ Plugins receive stable keys, immutable definitions, typed tags, and validated co
 ## Acceptance / greenlight criteria
 
 - Reordering files, packs with equivalent dependency order, worker completion, or hash-map insertion produces identical canonical registry snapshots and content fingerprints.
-- A save made with a test mod survives load/save without that mod and resolves byte-for-byte when the same compatible mod returns; no unknown block becomes air and no unknown item disappears.
+- A save made with a test mod refuses normal open without that mod, reports its exact
+  identity/digest mismatch, performs zero writes, and opens normally when the same
+  compatible mod returns. Recovery/export mode preserves bounded unknown data without
+  treating it as playable content.
 - One million random canonical states round-trip `key -> WorldStateId -> saved section -> RuntimeStateId -> key` with no collision or dependence on registration order.
 - Malformed names, duplicate definitions, tag cycles, missing required references, recipe ambiguity, and state-space bombs fail before world mutation with actionable diagnostics.
 - The default content set stays below the total-state cap, and registry lookup adds no allocation to steady-state block reads.
@@ -218,7 +248,9 @@ Smallest useful experiment:
 
 1. Implement typed registries, canonical key/state parsing, state expansion, tags, shaped/shapeless recipes, persisted world-ID reconciliation, and session-map serialization without Godot.
 2. Generate 100 synthetic mods in randomized discovery order, including 100,000 states, nested tags, and 10,000 recipes; compare canonical fingerprints across 100 runs.
-3. Save sections/inventories with one mod, remove it, round-trip placeholders, then restore and migrate it under kill/fault injection through `WORLD-04`.
+3. Save sections/inventories with one mod, remove it, assert zero-write world-open
+   refusal, exercise the separate recovery/export decoder, then restore and migrate
+   it under kill/fault injection through `WORLD-04`.
 4. Fuzz names, counts, property products, tag graphs, recipe ambiguity, payload lengths, stale inventory revisions, and network mappings.
 5. Benchmark 100 million state lookups, tag membership checks, recipe matches, and palette encode/decode operations in Release builds.
 
@@ -236,7 +268,9 @@ Success metrics:
 - Tags are powerful enough to alter recipes, tool behavior, and world generation. A changed tag set must participate in content/generator fingerprints even though tag membership is not copied into each save record.
 - Saving a full definition snapshot would aid archaeology but could accidentally become executable compatibility behavior. Persist identity, bounded recovery metadata, and hashes—not arbitrary old logic.
 - Recipe overlap analysis can be combinatorial for large tags. The loader needs indexed candidate expansion plus limits; equal-priority ambiguity may sometimes require author-supplied test fixtures rather than exhaustive proof.
-- A conservative solid missing block can trap a player. Recovery/admin tooling should offer safe teleport and explicit replacement, but preserving the world is more important than pretending the block is air.
+- Recovery/export placeholders are deliberately not gameplay objects. Any destructive
+  replacement requires an explicit admin migration with backup; normal world open
+  remains blocked until required content returns.
 
 ## Dependencies
 

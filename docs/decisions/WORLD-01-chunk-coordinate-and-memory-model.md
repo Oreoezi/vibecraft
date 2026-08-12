@@ -18,6 +18,15 @@ One-sentence rationale: Cubic sections make vertical cost proportional to occupi
 
 For v1, every dimension should have configurable generation and build ranges plus an operational world border. These are policy and denial-of-service limits, not serialization limits, and can be expanded without converting section keys.
 
+### Owner decision — 2026-08-13
+
+The initial v1 dimension policy is approximately **10,000 buildable blocks tall**.
+Represent it as explicit `MinBuildY` and exclusive `MaxBuildY` values whose difference
+is 10,000; the exact placement around world zero is a world-generation/product
+fixture, not a save-key assumption. Generation may use a smaller subrange. Signed
+sparse section keys remain height-agnostic so an operator or later release can expand
+the policy without converting every coordinate.
+
 ## Context and constraints
 
 - The C# server is authoritative and must stream, generate, tick, and save work in parallel.
@@ -117,7 +126,9 @@ Required property tests include `-1 -> section -1/local 15`, `-16 -> -1/0`, and 
 ### Height-agnostic, not work-agnostic
 
 - The section map is sparse. No array is indexed by global Y and no file header contains `min_y`, `height`, or a section-count ceiling.
-- A dimension descriptor may specify `GenerationRange`, `BuildRange`, and `OperationalBorder`. Expansion changes policy, not keys.
+- A dimension descriptor specifies `GenerationRange`, `BuildRange`, and
+  `OperationalBorder`. The initial `BuildRange` is 10,000 blocks tall. Expansion
+  changes policy, not keys.
 - Generation is requested by finite section/region ranges. A generator must never attempt to “generate a whole unbounded column.”
 - Columns maintain an ordered set of materialized/occupied section Ys and cached topmost opaque/solid positions. This supports skylight, weather, and spawn queries without scanning from an imaginary maximum height.
 - “No persisted row” means **no materialized override**, not necessarily “known air.” WORLD-03 must persist generation provenance/ranges so a changed generator cannot silently reinterpret previously visited empty space.

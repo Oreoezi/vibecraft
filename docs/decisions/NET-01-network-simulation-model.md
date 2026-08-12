@@ -12,6 +12,13 @@ Recommended choice: Use a server-authoritative hybrid: clients send sequenced in
 
 One-sentence rationale: This keeps a voxel world's durable state and anti-cheat boundary on one authority while hiding round-trip latency where it matters, without requiring deterministic lockstep or rollback of chunks, plugins, AI, inventories, and redstone.
 
+### Owner decision — 2026-08-13
+
+The owner accepted the recommended hybrid. Clients predict the shared movement kernel
+and reversible presentation; the server consumes input and alone commits gameplay;
+remote entities interpolate authoritative snapshots. This complements the earlier
+anti-speed/timer/fly decision in `ARCH-01`.
+
 This decision explicitly rejects three premises in the current spec:
 
 - “Secure netcode” cannot make cheating almost impossible. It can prevent a client from directly creating illegal authoritative state; it cannot prevent aim assistance, information disclosure, collusion, compromised server plugins, or every automation strategy.
@@ -26,7 +33,9 @@ This decision explicitly rejects three premises in the current spec:
 - Honest clients must remain playable under latency, jitter, loss, duplication, reordering, delayed chunks, and temporary server hitches.
 - The client and server need a shared player-movement implementation. Godot documents that its physics is not deterministic, so the network controller must not depend on replaying a Godot `CharacterBody3D` or rigid-body simulation on the standalone server ([Godot physics introduction](https://docs.godotengine.org/en/stable/tutorials/physics/physics_introduction.html)).
 - V1 is a survival sandbox, not a frame-tight fighting game. Whole-world rollback and 128 Hz simulation are disproportionate to the initial gameplay loop.
-- Use `WORLD-08`'s one fixed 20 Hz authoritative `WorldTick` for v1, render independently, and permit slower scheduled subsystems. `NET-06` measures packet/snapshot cadence. Do not expose 32/64/128 Hz authoritative profiles in v1; only test a 40 Hz player substep if the 20 Hz predicted controller fails a blind feel/correction test.
+- Use `WORLD-08`'s one fixed 60 TPS authoritative `WorldTick` for v1 and render
+  independently. `NET-06` measures packet/snapshot cadence and slower subsystem
+  divisors. Do not expose alternate authoritative tick profiles in v1.
 
 ## Options considered
 
@@ -176,7 +185,9 @@ Animation is not trusted anti-cheat data. Locomotion animation is derived from a
 - Under 150 ms RTT, 30 ms jitter, 5% random loss, 1% duplication, and 2% reordering, local input remains immediate and all clients converge after impairment without world corruption or an unbounded queue.
 - A deliberately modified client that sends impossible positions, NaN/infinity, accelerated client ticks, duplicate commands, excessive command rate, or invented block results cannot move or mutate the world beyond legal server simulation.
 - A missed chunk/entity delta triggers bounded baseline recovery; it never causes permanent desync.
-- The 20 Hz prototype sustains the declared player/entity/view-distance workload with measured p99 headroom agreed after reference hardware and workload are fixed. Arbitrary bot counts or percentages are research fixtures, not product requirements.
+- The 60 TPS prototype sustains the declared player/entity/view-distance workload with
+  measured p99 headroom agreed after reference hardware and workload are fixed.
+  Arbitrary bot counts or percentages are research fixtures, not product requirements.
 - Product language is changed from “movement cheats almost impossible” and “DDoS safe” to measurable threat-model outcomes; volumetric DDoS mitigation remains `NET-08`.
 
 ## Prototype or benchmark
@@ -212,7 +223,9 @@ Failure of these metrics does not justify switching to client authority. It requ
 - Server authority prevents illegal state from taking effect; it does not by itself detect every cheat or provide a fair ban policy.
 - Client prediction across block revisions is the hardest correctness edge. `NET-02` defines history/replay mechanics; `NET-04` must define support grace and combat/block fairness.
 - Plugins can still violate invariants if they receive mutable world access or block the tick. `ARCH-05` must constrain them to validated transactions and budgeted callbacks.
-- Fixed 20 Hz is the coherent V1 baseline, not a claim of optimality. Godot's own default physics is unrelated to the standalone shared controller. `NET-06` must test 20 Hz prediction first and may add one exactly nested 40 Hz player-substep branch only if a measured movement problem remains.
+- Fixed 60 TPS is the owner-selected V1 baseline. Godot's matching default physics
+  rate is coincidental; the standalone shared controller and protocol clock define
+  behavior and must pass the capacity/replay gate.
 
 ## Dependencies
 
@@ -226,11 +239,16 @@ Failure of these metrics does not justify switching to client authority. It requ
 - Global deterministic lockstep: rejected because slow peers stall progress and cross-platform deterministic world/plugin simulation is not credible.
 - Whole-world rollback: rejected because state capture, side-effect reversal, memory, and replay cost grow with chunks, entities, block systems, and plugins.
 - Client-authoritative creative mode: deferred; even creative should use explicit server-granted capabilities rather than a second authority model.
-- Global 32/64/128 Hz selection: rejected for v1; higher-rate nested movement remains a future experiment, not a server profile.
+- Global 32/64/128 Hz selection and a nested movement clock: rejected for v1. Any
+  future authority-rate change requires a new compatibility/architecture decision,
+  not a server profile toggle.
 - Peer-to-peer world authority: rejected for V1 because it conflicts with dedicated servers, simple anti-cheat boundaries, plugin ownership, and persistence.
 
 ## Source-quality notes
 
 - Mojang's Bedrock protocol repository, Microsoft Minecraft documentation, engine source repositories, Epic documentation, and released id/Valve source are primary or vendor sources.
 - Java Minecraft wire details are necessarily labeled community reverse engineering because Mojang does not publish a supported Java protocol specification.
-- The suitability conclusions, VibeCraft phase order, 20 Hz baseline, correction thresholds, and rollback rejection are engineering inferences to be validated by the prototype, not facts asserted by the cited projects.
+- The suitability conclusions, VibeCraft phase order, correction thresholds, and
+  rollback rejection are engineering inferences to be validated by the prototype.
+  The 60 TPS rate is an owner-selected product constraint whose capacity remains
+  unproven, not a fact asserted by the cited projects.

@@ -12,12 +12,18 @@ Project context:
 - Initial gameplay targets the scope and simplicity of early Minecraft.
 - Long-term goals include custom resource packs, permissioned client-side mods, large worlds, multiplayer, efficient redstone, and extensibility.
 - Original networking hypotheses included UDP, Protobuf messages, and configurable
-  32/64/128 Hz server ticks. Treat these as candidates to challenge, not requirements.
-  The integrated v1 baseline currently uses one 20 Hz authoritative world tick and
-  keeps transport, serialization, and hosting behind prototype gates.
+  32/64/128 Hz server ticks. Those tick profiles were rejected. The owner-selected
+  baseline is one fixed 60 TPS authoritative world loop, while transport packet and
+  snapshot rates remain independently paced and measurable.
+- Standalone GameNetworkingSockets is the selected transport foundation. Validate its
+  fit behind a narrow adapter; do not restart a custom-UDP design contest or add a
+  Steam Datagram Relay dependency.
 - Server target: threaded chunk generation/ticking, crash-safe saves, plugins, and client-mod compatibility checks.
-- World target: square chunks without a fixed maximum world height.
-- Client target: optimized chunk meshes, far rendering/LoD, client-side lighting, advanced materials, animated assets, and custom models.
+- Initial world target: square chunks with an approximately 10,000-block build-height
+  range. The exact minimum/maximum split remains a world-format decision.
+- Client target: optimized chunk meshes, a minimal fog-obscured far-terrain pass before
+  v1, client-side smoothing of block-scale 0–15 gameplay light, advanced materials,
+  animated assets, and custom models.
 
 Research topic:
 [INSERT TOPIC]

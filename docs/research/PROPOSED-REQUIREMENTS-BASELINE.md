@@ -49,9 +49,13 @@ The first playable proves a multiplayer building, streaming, durability, and rec
 ### Authority and time
 
 - **MUST:** The server accepts bounded player intent and alone commits position, velocity, grounded state, block outcomes, inventory-like state, health-like state, and all durable world mutations.
-- **MUST:** V1 has one authoritative `WorldTick` at **20 Hz**. Movement, interactions, entities, world mutation, deterministic publication, and future gameplay schedules share this commit timeline.
+- **MUST:** V1 has one authoritative `WorldTick` at **60 TPS**. Movement,
+  interactions, entities, world mutation, deterministic publication, and future
+  gameplay schedules share this commit timeline.
 - **MUST:** Rendering, input-device sampling, packet sending, snapshot sending, and interpolation may run at independent rates, but none may create a second authoritative gameplay clock.
-- **MAY:** An exactly nested 40 Hz player-controller experiment may be considered only if a blind 20 Hz movement/correction test fails. Configurable 32/64/128 Hz whole-world profiles are not a v1 requirement.
+- **MUST:** There is no alternate/nested movement clock or user-selectable TPS profile
+  in v1. Slower systems and network snapshots use explicit deadlines/divisors without
+  changing the authority grid.
 - **MUST:** The owning client may predict local movement and reversible presentation, then reconcile to authority. Remote entities use authoritative snapshots and interpolation.
 - **MUST:** First-playable block actions are idempotent, revision-aware, and validated against current authoritative state. Combat rewind, speculative collision, and per-player phantom support are disabled.
 - **MUST:** Cosmetic lighting, animation, particles, and sound may be client-owned; any light or timing value that affects gameplay remains server-owned.
@@ -60,10 +64,18 @@ Owners: [ARCH-01](../decisions/ARCH-01-authority-and-simulation.md), [NET-01](..
 
 ### World model and concurrency
 
-- **MUST:** The authoritative world is sparse and three-dimensional. It uses finite signed section coordinates, explicit operational borders/ranges, and finite generation requests; “unlimited height” must never mean literal infinity or an unbounded job.
+- **MUST:** The authoritative world is sparse and three-dimensional. It uses finite
+  signed section coordinates, explicit operational borders/ranges, and finite
+  generation requests. The initial dimension build policy is approximately 10,000
+  blocks tall, expressed as configurable min/exclusive-max Y values rather than a
+  save-key limit.
 - **MUST:** Empty or absent vertical space consumes no dense column-height allocation. Full-detail, simulation, entity, and generation interest all have finite horizontal and vertical extents.
 - **MUST:** The section edge, indexing order, coordinate division, revision representation, and persistent key encoding are frozen only after negative-coordinate, overflow, memory, edit, save, network, and remesh tests select them. A 16³ section is the leading candidate, not a requirement of this baseline.
-- **MUST:** Ordinary blocks are compact data, not one managed or Godot object per block. Stable namespaced identities are distinct from world-local and session/runtime numeric IDs; missing content is distinguishable from air.
+- **MUST:** Ordinary blocks are compact data, not one managed or Godot object per
+  block. Stable namespaced identities are distinct from world-local and
+  session/runtime `uint32` IDs. A gameplay-modded world refuses normal open before
+  simulation if required content is missing/incompatible; recovery/export may
+  preserve bounded unknown data but never treats it as air or playable placeholders.
 - **MUST:** One owner commits live world state in deterministic order. Worker jobs may load, generate, light, mesh, compress, or inspect immutable snapshots, but only bounded, revisioned results may be published at an owner-defined boundary.
 - **MUST:** Every asynchronous result has an identity, revision, lifetime/epoch, owner, cancellation/failure behavior, and bounded queue. A stale result can never replace newer state.
 - **SHOULD:** Parallel materialization should be used where measurements justify it. Parallel live-region mutation is a post-v1 architecture option, not “threaded chunk ticking” for the first playable.
@@ -101,11 +113,21 @@ Owners: [ARCH-03](../decisions/ARCH-03-godot-client-boundary.md), [RENDER-01](..
 - **MUST:** The protocol distinguishes bounded realtime, control, and bulk traffic semantics. Obsolete realtime state may be superseded; reliable bulk work may not cause unbounded memory or indefinitely starve current control/realtime state.
 - **MUST:** Message framing, maximum sizes, malformed-input handling, replay behavior, backpressure, authentication, authorization, and compatibility negotiation are explicit regardless of payload codec.
 - **SHOULD:** Protobuf may be used for low-frequency structured messages. Hot snapshots and chunk payloads may use other versioned encodings if measurement shows a material benefit.
-- **MUST:** Transport selection remains open until packaged target-platform tests cover native ownership, congestion, lane behavior, connection churn, trust, and admission. GameNetworkingSockets/reliable UDP and QUIC streams plus datagrams are candidates; no candidate's marketing claims are VibeCraft guarantees.
+- **MUST:** GameNetworkingSockets is the selected default transport behind the
+  VibeCraft abstraction. Packaged target-platform tests still gate native ownership,
+  congestion, lanes, churn, trust, admission, and lifecycle; a measured showstopper
+  may reopen the implementation without changing gameplay protocol semantics.
 - **MUST:** The same host-agnostic `ServerCore`, authority rules, action handlers, and persistence path serve dedicated multiplayer and singleplayer.
 - **MUST:** Windows x64 and Linux x64 are the first supported platforms. Supervised child-process loopback is the selected desktop singleplayer topology; it must still pass startup, memory, packaging, pause/save, crash isolation, orphan cleanup, and protocol-trace gates. An embedded adapter remains a test/fallback implementation, not a second product mode.
 - **MUST:** First-playable public exposure is private/invite-only unless authenticated server identity, authenticated player sessions, pre-auth admission bounds, and operator/upstream responsibilities pass their gates.
 - **MAY:** LAN hosting is a later explicit mode. It must not be created by silently rebinding a private singleplayer process.
+- **MUST:** One authenticated session cannot receive unbounded parse, command,
+  generation, circuit, plugin, queue, or outbound work. The declared single-attacker
+  fixture must throttle/disconnect it without crashing or materially stalling healthy
+  sessions; this is distinct from volumetric DDoS protection.
+- **SHOULD:** Protocol/session epochs preserve a post-v1 path for trusted proxies and
+  authenticated server-transfer offers, including regional reroute, single-use
+  handoff, destination identity verification, and complete content re-agreement.
 
 Owners: [ARCH-04](../decisions/ARCH-04-singleplayer-server-lifecycle.md), [NET-03](../decisions/NET-03-transport-and-reliability.md), [NET-05](../decisions/NET-05-interest-management.md), [NET-07](../decisions/NET-07-protocol-versioning.md), [NET-08](../decisions/NET-08-server-abuse-and-ddos-boundary.md).
 
@@ -130,6 +152,25 @@ Artifact taxonomy:
 | Private native fork | Outside supported ecosystem | Fully trusted local/operator code; no supported manifest, resolver, compatibility promise, or server-download path |
 
 Owners: [ASSET-01](../decisions/ASSET-01-packaging-and-namespaces.md), [ASSET-02](../decisions/ASSET-02-manifest-and-overrides.md), [ASSET-03](../decisions/ASSET-03-model-and-animation-contract.md), [ASSET-04](../decisions/ASSET-04-animation-runtime.md), [ASSET-05](../decisions/ASSET-05-procedural-assets.md), [NET-09](../decisions/NET-09-client-content-agreement.md).
+
+## V1 release rendering completion
+
+The first playable remains the prerequisite vertical slice. Before a release is called
+v1, it additionally includes a bounded, deliberately low-fidelity far-terrain layer
+for the Overworld-like dimension:
+
+- **MUST:** Coarse authorized terrain silhouettes appear beyond the full-detail radius
+  and terminate in heavy ordinary fog. They are cosmetic and never provide collision,
+  selection, simulation, generation authority, spawning, or canonical save data.
+- **MUST:** Missing, stale, corrupt, unsupported, or over-budget far data falls back to
+  fog. Far work sheds before near terrain, action, player, or collision work.
+- **MUST:** CPU, GPU, cache, memory, and network use are bounded and plateau in the
+  declared movement/edit soak. Older coarse revisions never replace newer edits.
+- **MAY:** V1 may use a short horizon, simple opaque/cutout/emissive summaries, cheap
+  overlap/skirts, no far shadows, and a per-dimension representation. Better seams,
+  materials, caves/interiors, and a 2,048-block horizon remain later quality work.
+
+Owner: [RENDER-03](../decisions/RENDER-03-far-terrain-lod.md).
 
 ## Milestone 2: survival milestone
 
@@ -187,7 +228,9 @@ Owners: [NET-08](../decisions/NET-08-server-abuse-and-ddos-boundary.md), [MOD-02
 These preserve the original ambition but are not prerequisites for the first playable or core survival milestone:
 
 - **MAY:** Nether-like and End-like original dimensions, portals, bosses, broad biome/structure/weather sets, and a larger mob/content roster.
-- **MAY:** Far-terrain 3D voxel LoD, larger horizons, shader-sampled light pages, colored light, GI, local volumetrics, advanced reflection/refraction/transparency, and higher material tiers.
+- **MAY:** Extended far-terrain quality/horizons and universal 3D LoD, shader-sampled
+  light pages, colored light, GI, local volumetrics, advanced
+  reflection/refraction/transparency, and higher material tiers.
 - **MAY:** Rich animation graphs, larger rigged crowds, texture animation, deterministic build-time procedural assets, and bounded built-in runtime shader effects.
 - **MAY:** A public sandboxed client/server mod ecosystem, stable versioned capability ABI, richer brokered capabilities, package repositories/signing, and carefully separated trusted-native distribution.
 - **MAY:** Explicit generator upgrades with retained profiles and seam adapters, broader deterministic structures, and migration/repair tooling.
@@ -203,7 +246,9 @@ Unless promoted by a later approved milestone, VibeCraft does not require:
 - Minecraft protocol/save/seed parity, historical bug compatibility, or runtime loading of Minecraft formats;
 - configurable 32/64/128 Hz whole-world simulation in v1;
 - client-authored gameplay outcomes, global deterministic lockstep, or whole-world rollback;
-- far LoD, volumetric fog, physically exact transparency/refraction, ray tracing, or arbitrary resource-pack shaders for v1;
+- extreme/unbounded far distance, high-fidelity far materials, volumetric fog,
+  physically exact transparency/refraction, ray tracing, or arbitrary resource-pack
+  shaders for v1;
 - public anonymous hosting, universal NAT traversal, remote attestation, or a DDoS-proof claim;
 - executable mods/plugins, public ABI stability, arbitrary network/filesystem capabilities, or a marketplace before their explicit gates;
 - automatic server distribution or execution of native client code;

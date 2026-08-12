@@ -8,6 +8,11 @@ Role: skeptical technical producer and architecture sequencing review
 > contradiction list near the end records the first-wave snapshot and is retained as
 > review evidence; accepted corrections are tracked in
 > [`INTEGRATION-RESOLUTIONS.md`](INTEGRATION-RESOLUTIONS.md).
+>
+> **Owner update, 2026-08-13:** Keep the vertical-slice sequencing, but replace this
+> review's provisional 20 Hz/GNS-candidate branches with the selected fixed 60 TPS and
+> standalone-GNS directions. Minimal fog-obscured far terrain is now a G6 v1 gate
+> after, not inside, the G5 first playable.
 
 ## Verdict
 

@@ -15,6 +15,12 @@ One-sentence rationale: Input replay preserves responsive local control and serv
 
 Do not use client animation state, position, velocity, grounded state, or client elapsed time as authority. Animation intent can be transmitted for presentation, but locomotion is derived from authoritative controller state.
 
+### Owner decision — 2026-08-13
+
+The owner accepted this recommended input/ack/restore/replay design. The prototype now
+uses the owner-selected fixed 60 TPS `WorldTick`; the shared controller must meet the
+same correction, abuse, and cross-platform conformance criteria at that rate.
+
 ## Context and constraints
 
 - The player must feel local even when the round trip is 100–200 ms; waiting for the server is not acceptable.
@@ -22,7 +28,9 @@ Do not use client animation state, position, velocity, grounded state, or client
 - Voxel collision changes at runtime. Breaking the supporting block, placing a block into a path, receiving a delayed chunk, teleporting, knockback, water, ladders, and future moving blocks all invalidate naive “restore position and replay current world” logic.
 - Client and server are both C#, but only the client has Godot. Shared movement code must use plain value types and voxel collision queries, not Godot physics objects.
 - Godot explicitly says its physics is not deterministic across seemingly identical situations ([Godot physics introduction](https://docs.godotengine.org/en/stable/tutorials/physics/physics_introduction.html)). Replaying a `CharacterBody3D` result on a standalone server is therefore not a sound authority model.
-- `WORLD-08` owns one 20 Hz V1 `WorldTick`. Rendering, camera, and input-device sampling remain frame-rate independent; prediction removes RTT but not fixed-step granularity. Only if the 20 Hz branch fails a measured feel test should the prototype add a controller substep nested exactly twice per world tick.
+- `WORLD-08` owns one 60 TPS V1 `WorldTick`. Rendering, camera, input-device sampling,
+  packet sending, and snapshot sending remain independently paced; prediction uses
+  the same 60 TPS logical frames on client and server.
 - “Make movement cheats almost impossible” is not an acceptance criterion. The measurable criterion is that malformed or impossible input cannot create movement outside the server's legal controller, while honest impaired clients remain stable.
 
 ## Options considered
@@ -105,7 +113,7 @@ Inputs are quantized before *both* local and server simulation so the client nev
 
 ### Input generation and transport
 
-At each 20 Hz predicted `WorldTick`:
+At each 60 TPS predicted `WorldTick`:
 
 1. Sample held controls and input edges accumulated since the previous step.
 2. Quantize movement axes and look direction.
@@ -123,10 +131,14 @@ Latency-sensitive world intents such as place, break completion, attack, and use
 For each player, maintain a fixed receive window and no unbounded collections:
 
 - Drop already processed or duplicate sequences using wrap-safe comparison.
-- Accept at most 20 queued future frames (one second at 20 Hz); reject frames beyond a small measured lead window (prototype start: four ticks).
+- Accept at most 60 queued future frames (one second at 60 TPS); reject frames beyond
+  a small measured lead window (prototype start: twelve ticks / 200 ms).
 - Parse only finite, in-range quantized fields; unknown button bits are invalid for the negotiated protocol.
 - Process at most one movement frame per authoritative player step. Sending faster never grants more simulated time.
-- If the next input is missing, wait only within the normal tick queue. For up to two consecutive simulation steps, reuse held axes/look from the last valid frame but clear all edge-triggered actions. On the third missing step, use neutral movement and clear all edges until fresh input arrives.
+- If the next input is missing, wait only within the normal tick queue. For up to six
+  consecutive simulation steps (100 ms), reuse held axes/look from the last valid
+  frame but clear all edge-triggered actions. On the seventh missing step, use neutral
+  movement and clear all edges until fresh input arrives.
 - Late frames for server steps already simulated are discarded rather than rewinding the authoritative world. The owning client converges through reconciliation.
 - Rate-limit bytes, datagrams, decoded input frames, and gameplay commands separately. Disconnect persistent protocol abuse; do not allocate in proportion to claimed counts.
 
@@ -225,7 +237,12 @@ This prevents common movement packets from granting an illegal position. It does
 
 Required: yes
 
-Smallest useful experiment: Implement only the shared 20 Hz controller, authoritative input queue, input/action bundling, owner-state ack, bounded cell-change journal, immediate history-miss reset, presentation offset, and remote snapshot buffer. Use a tiny fixed world with solid blocks, slabs/stairs if supported, water, ladder, and one editable support block. Drive one real Godot client, one observer, and scripted bots through the `NET-03` impairment harness.
+Smallest useful experiment: Implement only the shared 60 TPS controller,
+authoritative input queue, input/action bundling, owner-state ack, bounded cell-change
+journal, immediate history-miss reset, presentation offset, and remote snapshot
+buffer. Use a tiny fixed world with solid blocks, slabs/stairs if supported, water,
+ladder, and one editable support block. Drive one real Godot client, one observer, and
+scripted bots through the `NET-03` impairment harness.
 
 ### Required scenarios
 
@@ -239,7 +256,8 @@ Smallest useful experiment: Implement only the shared 20 Hz controller, authorit
 
 ### Success metrics
 
-- Camera/look feedback occurs in the next render frame; translated controller response occurs no later than the next 20 Hz local controller step.
+- Camera/look feedback occurs in the next render frame; translated controller response
+  occurs no later than the next 60 TPS local controller step.
 - For the 150 ms/5% profile, p95 logical reconciliation error is under 0.05 block and p99 presentation correction under 0.25 block after tuning; hard snaps are zero outside explicit discontinuities.
 - For the 250 ms/10% profile, position is within 0.01 block of authority within 1.5 seconds after controls return to neutral.
 - Three-copy input redundancy reduces missing simulated input steps relative to one-copy input in the expected direction under both random and burst loss; actual counts, not the `p^3` model, decide.
@@ -252,7 +270,9 @@ Smallest useful experiment: Implement only the shared 20 Hz controller, authorit
 
 - The journal duration and 4 MiB prototype cap are hypotheses. Report retained bytes and forced resets under edit storms; do not expand memory automatically to preserve replay.
 - Client and server C# floating-point results may still diverge across hardware. Quantized inputs, stable collision ordering, explicit tolerances, and continuous authoritative replay limit impact; fixed-point movement should be considered only if measurements show persistent platform drift.
-- A 20 Hz controller may feel coarse despite prediction. `NET-06` must first run a blind 20 Hz feel/correction test; only failure unlocks one 40 Hz nested-substep branch. Godot's default physics rate does not define the shared controller.
+- A 60 TPS controller is selected for responsiveness but costs three times the former
+  20 Hz research proposal. `NET-06`/`WORLD-08` must prove capacity without creating a second
+  controller clock or silently reducing the rate.
 - Controller rules are gameplay. Changing friction, step order, hitboxes, or collision ordering requires a movement-rules version and coordinated protocol release.
 - Predicting collision removal can feel better but increases correction complexity. The overlay path can be disabled initially while keeping immediate visual block feedback.
 - Moving platforms, vehicles, pistons, portals, and cross-dimension transfer need explicit reference-frame/history rules and are deferred from the first controller prototype.
@@ -279,4 +299,7 @@ Smallest useful experiment: Implement only the shared 20 Hz controller, authorit
 
 - Mojang, Microsoft, Epic, Godot, id Software, Valve source, and Luanti source are primary/vendor evidence.
 - Java protocol archives and GrimAC are labeled community evidence.
-- Buffer sizes, 20 Hz behavior, journal duration/bytes, smoothing windows, interpolation bounds, and numeric success thresholds are proposed VibeCraft contracts. They are intentionally falsifiable and must be tuned or rejected by the prototype rather than copied from another game.
+- Buffer sizes, 60 TPS behavior, journal duration/bytes, smoothing windows,
+  interpolation bounds, and numeric success thresholds are proposed VibeCraft
+  contracts. They are intentionally falsifiable and must be tuned or rejected by the
+  prototype rather than copied from another game.

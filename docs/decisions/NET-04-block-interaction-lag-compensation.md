@@ -12,7 +12,15 @@ Recommended choice: Keep the live simulation and terrain fully server-authoritat
 
 One-sentence rationale: Current-time validation is the smallest secure baseline; historical combat and per-player phantom support add fairness, abuse, history, and gameplay-rule costs that must demonstrate a concrete benefit before becoming contracts.
 
-This is **not** a recommendation for whole-world rollback. Historical state is queried to validate an action; accepted consequences are committed once to the current authoritative world.
+### Owner decision — 2026-08-13
+
+The owner selected option **A**. V1 validates placement, breaking, melee, and use from
+the actor's receive-time authoritative state. It keeps action identity and prediction
+repair clean enough that a later version can add a Source-2-like subtick/historical
+capability, but v1 allocates no pose or voxel rewind history for action validation.
+
+This is **not** a recommendation for whole-world rollback. V1 action queries use the
+current authoritative world and commit once at the current tick.
 
 ## Context and constraints
 
@@ -60,22 +68,13 @@ Labels used below: **Fact** is directly supported by the linked implementation/d
 
 ## Proposed design
 
-### 1. Shared time and immutable action identity
+### 1. Current time and immutable action identity
 
-The connection time-sync layer maps a wrapping `ClientPredictionStep` to an estimated
-`WorldTick`. The server never accepts a raw client wall-clock value. It clamps
-historical evaluation to:
-
-```text
-effective_world_tick = clamp(mapped_client_prediction_step,
-                             current_world_tick - max_rewind_ticks,
-                             current_world_tick)
-
-default max_rewind = 150 ms
-hard configurable range = 0..250 ms
-```
-
-The 150 ms default is deliberately much smaller than Source's one-second history because VibeCraft has short melee reach and player-created cover. A command older than the retained window is not disconnected merely for being late; it receives current-time validation with `compensation=none`.
+V1 sets `effective_world_tick = current_world_tick` for every gameplay action. A
+wrapping `ClientPredictionStep`/latest input sequence remains in the request so action
+ordering, prediction repair, diagnostics, and a future negotiated subtick capability
+have a clean seam. The server never accepts a raw client wall-clock or lets the client
+choose an evaluation tick.
 
 Every action has a connection-scoped monotonically increasing `action_id`. The server retains recent results and returns the same result for a duplicate. Gaps are legal because packets may be abandoned, but replaying an old accepted ID cannot mutate state twice.
 
@@ -117,7 +116,12 @@ message ActionResult {
 }
 ```
 
-`aim_origin` is evidence for diagnostics, not trusted authority. The server reconstructs the actor's eye pose from history. `expected_section_revision` makes the target conditional on the owning section snapshot: breaking stone at revision 41 cannot accidentally break the chest that replaced it at revision 42. Inventory revision is a distinct unsigned domain and is never compared with a section revision.
+`aim_origin` is evidence for diagnostics, not trusted authority. The server uses the
+actor's current authoritative eye pose after processing admitted movement for the
+step. `expected_section_revision` makes the target conditional on the owning section
+snapshot: breaking stone at revision 41 cannot accidentally break the chest that
+replaced it at revision 42. Inventory revision is a distinct unsigned domain and is
+never compared with a section revision.
 
 ### 3. Block breaking, placement, and stale targets
 
@@ -126,21 +130,24 @@ The client may immediately render a predicted local block state and animation in
 For every block action the server:
 
 1. processes already queued movement inputs for the tick before interactions;
-2. reconstructs the actor eye pose at `effective_tick`;
+2. reads the actor's current authoritative eye pose;
 3. requires the current cell state and revision to equal the request's expectation;
-4. raycasts/reach-checks from the historical eye pose, but requires line of sight to be clear in both the historical view and the current world;
+4. raycasts and reach-checks only against the current authoritative world;
 5. checks tool, inventory revision, permissions, cooldown, and edit rate in current authoritative state;
 6. commits once at the current tick and returns authoritative affected cells and inventory revision.
 
-The “clear both then and now” rule favors newly placed cover and prevents an action from passing through either a wall that existed when the player acted or a wall built before the server committed it. Recent voxel history is a ring of change records `(cell, old_state, new_state, revision, tick)`, not snapshots of chunks. A short ray reconstructs only cells changed during the rewind window.
-
-`BeginBreak` records the server-validated target and a compensated start tick. `FinishBreak` must reference that begin action and satisfy tool-specific duration. This removes one network-delay penalty without allowing a client to claim an arbitrary old start. Placement and instant-use actions never commit into a past world.
+`BeginBreak` records the server-validated target and current authoritative start tick.
+`FinishBreak` must reference that begin action and satisfy tool-specific duration. The
+client cannot claim an arbitrary earlier start. Placement and instant-use actions
+commit only to current state.
 
 If the target is stale, unloaded, protected, or out of reach, the server sends a result plus the minimum authoritative cells/inventory slots needed to remove the prediction. It must not synchronously load a chunk for an untrusted request.
 
 ### 4. Combat and entity interaction
 
-This section specifies a **deferred experiment**, not v1 behavior. Do not allocate pose/voxel rewind history until the combat rules and target concurrency are defined.
+This section specifies a **post-v1 negotiated subtick experiment**, not v1 behavior.
+Do not allocate pose/voxel rewind history until a later product decision defines the
+combat rules, target concurrency, and protocol capability.
 
 Keep a ring buffer of authoritative poses for players and other explicitly lag-compensated entities: tick, position, orientation, stance, and hitbox. Do not include arbitrary mobs by default.
 
@@ -168,53 +175,60 @@ limit    = one lease per grounded episode; no renewal by further edits
 
 During the lease, only downward collision for that player treats the removed top face as support. The cell remains air for rendering, raycasts, all other players, and all other collision faces. Gravity does not advance that player downward while the lease is active. The owner snapshot includes remaining lease ticks so local prediction can reproduce it.
 
-This is a small “coyote time caused by remote world edits,” not general hovering. It does not apply when the player removed their own support, voluntarily jumped, or was already airborne. The one-lease-per-grounded-episode rule prevents collaborators from repeatedly breaking supports to hold a player up. Whether explosions receive the same grace is deferred to gameplay policy; v1 applies it only to direct player edits.
+This would be a small “coyote time caused by remote world edits,” not general hovering. It would not apply when the player removed their own support, voluntarily jumped, or was already airborne. The one-lease-per-grounded-episode rule prevents collaborators from repeatedly breaking supports to hold a player up. If a later experiment is authorized, its first branch should cover only direct player edits; explosions remain a separate gameplay-policy question. V1 has no support lease.
 
 If a late movement command shows the player reaching adjacent confirmed support before expiry, no fall or large downward reconciliation occurs. Otherwise the player begins falling when the lease expires. Latency beyond 150 ms is deliberately not hidden indefinitely.
 
 ### 6. Abuse and failure behavior
 
 - Token-bucket limits apply separately to movement inputs, edit attempts, combat actions, and stale retries. Rejected attempts consume a token.
-- Action history and change history are bounded by time and count. Disconnect clears them; dimension transfer starts a new action epoch.
+- Action-result history is bounded by time and count. Disconnect clears it; dimension
+  transfer starts a new action epoch. V1 keeps no action-validation rewind history.
 - Invalid vectors, non-finite numbers, impossible sequence jumps, and coordinates outside loaded/authorized interest are rejected before raycasting.
 - Action outcomes use a reliable ordered application channel, but duplicate result requests remain safe. Visual swing/mining progress may be unreliable.
-- If history is missing because of server overload, migration, or teleport, validation falls back to current state and reports `compensation=none`; it never trusts client history.
-- Metrics: compensation window used, stale-edit ratio, correction magnitude, support-lease count/outcome, validation rejection reason, history fallback, and per-action validation time.
+- Metrics: stale-edit ratio, correction magnitude, validation rejection reason, and
+  per-action validation time. Future compensation metrics exist only when that
+  capability is implemented.
 
 ## Greenlight criteria
 
 - The prototype demonstrates idempotent edit/inventory outcomes under loss, duplication, and reordering.
 - Current-time validation never accepts duplicate damage/drops, extra reach, stale inventory spend, or a through-current-cover action.
-- Combat rewind and support grace each receive their own `greenlight`, `defer`, or `reject` result. Failure of either branch cannot block the v1 block-edit protocol.
-- Any enabled compensation history meets byte and CPU caps derived from the declared first-playable concurrency target.
+- Combat rewind/subtick and support grace remain separately deferred and cannot block
+  the v1 block-edit/combat protocol.
 
 ## Prototype or benchmark
 
 Required: yes  
-Smallest useful experiment: a headless C# harness with two players, a 16³ mutable test volume, authoritative input simulation, and current-time block prediction/reconciliation. Add pose rewind and the support lease as separately toggled branches after the baseline passes. Drive all branches through the same deterministic network fault injector.
+Smallest useful experiment: a headless C# harness with two players, a 16³ mutable test
+volume, authoritative input simulation, and current-time block/combat prediction and
+reconciliation. Do not add pose rewind or support leases to the v1 experiment. Drive
+the baseline through the deterministic network fault injector.
 
 Test matrix:
 
 - RTT: 0, 50, 100, 200, and 350 ms;
 - jitter: 0, 20, and 50 ms;
 - random loss: 0%, 1%, and 5%, plus duplicate/reordered action packets;
-- scenarios: stale break target replaced with another block; competing placements; movement as support is removed; wall placed/removed during melee; forged old/future ticks; action replay; unloaded target; declared acceptance load plus a separate stress load. Support-grace runs must add collusion, repeated bridges/traps, jump, knockback, and explosion cases.
+- scenarios: stale break target replaced with another block; competing placements;
+  movement as support is removed; wall placed/removed before receive-time melee;
+  forged old/future ticks; action replay; unloaded target; declared acceptance load
+  plus a separate stress load.
 
 Success metrics:
 
 - zero divergent final block/inventory states and zero duplicate accepted effects across the fault matrix;
-- zero accepted melee hits where the voxel ray is blocked at either historical or current evaluation time;
-- for a player whose valid movement reaches adjacent support before lease expiry, at least 99.9% of runs at RTT <= 200 ms and jitter <= 20 ms avoid a downward correction over 0.10 block;
-- report p50/p95/p99 validation cost and retained history bytes at the declared acceptance and stress loads; freeze budgets only after targets exist;
-- pose and voxel-change history remains within its configured hard cap and missing history falls back to current-time validation;
+- zero accepted melee hits where the receive-time authoritative voxel ray is blocked;
+- report p50/p95/p99 validation cost at the declared acceptance and stress loads;
+  freeze budgets only after targets exist;
 - every rejected prediction is repaired within one action-result delivery plus one simulation snapshot.
 
 ## Risks and open questions
 
 - The support lease is a novel gameplay rule, not a copied standard. It may feel like momentary hovering or alter trap/PvP timing; the prototype needs playtesting, not only correctness tests.
-- “Clear both historically and currently” favors defenders/builders and can reject a hit that looked valid to the attacker. A different fairness choice cannot eliminate the paradox; it only chooses who sees it.
-- The exact rewind cap may need mode-specific tuning. Competitive servers may choose 100 ms; cooperative servers may choose 200–250 ms, but the server must publish the value.
-- Reconstructing historical collision from a change log assumes NET-05 keeps the relevant cells resident. Missing history must safely degrade to current-only validation.
+- Receive-time authority favors the current defender/world and will reject some actions
+  that looked valid on a high-latency client. That is the selected v1 tradeoff. A
+  future subtick capability must explicitly choose its rewind cap and cover paradox.
 - Godot and server collision implementations must agree closely enough for prediction. This decision does not require bitwise-deterministic general physics, but player voxel collision needs shared test vectors.
 - Native plugins must not be allowed to mutate live state while a historical query is in progress or retain references to historical views.
 
@@ -230,4 +244,6 @@ Success metrics:
 - One-second rewind copied from Source: rejected because short-range melee plus player-built cover makes defender paradoxes much more severe.
 - Per-client permanent collision worlds: rejected because they destroy a single authoritative simulation and create plugin/redstone/entity inconsistencies.
 - Projectile rewind/fast-forward: deferred until a bow prototype proves current-time server spawning is insufficient.
+- Historical/subtick block and melee validation: deferred to a later negotiated
+  protocol/gameplay capability after v1 current-time behavior ships cleanly.
 - Hiding arbitrary high latency: rejected as an impossible absolute requirement; beyond the bounded window, VibeCraft degrades to current-time authority.

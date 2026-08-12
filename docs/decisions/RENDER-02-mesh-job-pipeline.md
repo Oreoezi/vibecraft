@@ -14,6 +14,30 @@ One-sentence rationale: Versioned jobs and a budgeted commit point provide respo
 
 The old resident mesh remains visible until its replacement is fully uploaded. Mesh building is asynchronous even for nearby edits; priority, not synchronous main-thread work, is the responsiveness mechanism.
 
+### Owner review status and plain-language behavior — 2026-08-13
+
+The owner has **not greenlit the detailed mechanism yet** because the first research
+pass was too implementation-heavy. The recommendation means this in ordinary play:
+
+1. A block/light/pack change marks the affected section's desired mesh revision dirty.
+2. Repeated changes collapse into that newest desired revision instead of spawning an
+   unlimited task per block.
+3. When a bounded worker is ready, it takes an immutable padded copy of the latest
+   section data and builds plain vertex/index arrays without touching Godot.
+4. If the world changes again before completion, that old result is discarded by
+   revision; it can never overwrite newer terrain.
+5. The Godot main thread uploads only a bounded amount each frame. The old correct
+   mesh remains visible until replacement, so delayed work produces temporary visual
+   staleness rather than holes, corruption, or simulation stalls.
+6. Near edits and collision-visible terrain outrank distant/far work; aging prevents
+   lower-priority sections from starving forever.
+
+The owner does not need to choose worker count, snapshot/copy strategy, `ArrayMesh`
+versus a lower-level buffer backend, or upload milliseconds from prose. The prototype
+measures those. The product discussion still needed is the acceptable visible delay
+for nearby edits and how aggressively visuals may degrade during teleports/edit
+storms.
+
 ## Context and constraints
 
 - Terrain edits, neighbor arrival, lighting propagation, resource-pack reloads, and LoD changes can all invalidate section output.

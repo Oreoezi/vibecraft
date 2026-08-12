@@ -32,7 +32,9 @@ This decision deliberately replaces two overstatements in the current spec:
 - Immediate local movement response matters more than exact visual agreement on every frame.
 - Blocks are collision geometry and mutable shared state; movement prediction and world-update ordering cannot be designed independently.
 - Inventories, item durability, crafting, combat, entity AI, random outcomes, scheduled block ticks, and redstone are economically or competitively relevant.
-- Rendering may run at an arbitrary frame rate. `WORLD-08` owns one 20 Hz authoritative `WorldTick` for v1; `NET-06` studies input/snapshot transmission cadence without creating another simulation grid. A higher-rate nested player substep is an experiment only if 20 Hz prediction fails a measured feel test.
+- Rendering may run at an arbitrary frame rate. `WORLD-08` owns one fixed 60 TPS
+  authoritative `WorldTick` for v1; `NET-06` studies input/snapshot transmission
+  cadence without creating another simulation grid.
 - The initial game should not depend on whole-world rollback or deterministic lockstep. Both would multiply the cost of voxel changes, mods, physics, and debugging.
 - Prediction code must be headless, engine-independent C#. Godot physics objects are presentation adapters, not the canonical movement implementation.
 
@@ -184,7 +186,8 @@ Smallest useful experiment: Build a headless shared C# character controller, an 
 
 Test matrix:
 
-- fixed 20 Hz authoritative `WorldTick`, render-rate client presentation, and separately measured packet cadence;
+- fixed 60 TPS authoritative `WorldTick`, render-rate client presentation, and
+  separately measured packet cadence;
 - 0, 50, 150, and 300 ms round-trip latency;
 - 0–50 ms jitter, 0%, 2%, and 5% loss, plus 1% duplication/reordering;
 - walking, sprinting, jumping, stair/edge contact, water/ladder equivalents, knockback, teleport, chunk-boundary collision, and block edits on the movement timeline;

@@ -192,7 +192,7 @@ Missing
 - The same pinned generator profile and request trace produces byte-identical finalized section hashes, structure plans, and target patches across 20 runs at worker counts 1, 2, and 4.
 - Queue records and scratch bytes remain below configured hard limits under sustained teleport, disconnect, and pregeneration churn; there is no hidden unbounded continuation/task collection.
 - A cancelled or superseded job never becomes resident, and duplicate demand causes one load/generation execution.
-- On a machine with at least eight logical processors and a generator fixture costing 50-100 ms per chunk, two workers achieve at least 1.7x single-worker throughput and four achieve at least 2.5x without pushing simulation p99 above its 50 ms budget.
+- On a machine with at least eight logical processors and a generator fixture costing 50–100 ms per chunk, two workers achieve at least 1.7× single-worker throughput and four achieve at least 2.5× without pushing the fixed 60 TPS simulation step above its 16.67 ms p99 capacity gate.
 - `RequiredNow` jobs admitted under a saturated prefetch/batch queue begin execution within 100 ms after a worker is available.
 - Generator, decoder, and completion paths contain no Godot types and no access to resident mutable chunks.
 - Fault injection for read errors, generator exceptions, cancellation, worker shutdown, and stale epochs produces the documented outcome with no silent regeneration.

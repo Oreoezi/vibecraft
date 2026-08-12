@@ -44,12 +44,13 @@ Do not greenlight a decision merely because it is the most sophisticated option.
 
 ## Recommended order
 
-Use the G0–G5 order in [`research/DEPENDENCY-MAP.md`](research/DEPENDENCY-MAP.md),
+Use the G0–G6 order in [`research/DEPENDENCY-MAP.md`](research/DEPENDENCY-MAP.md),
 derived from the product sequencing review. In brief: define the product fixture; test
 core data/irreversible formats; prove durable headless state and authority/movement;
 then test transport and the Godot streaming slice; integrate only after every branch
-has a written disposition. Visual polish, executable mods, broad worldgen, and
-redstone are not first-playable dependencies.
+has a written disposition. The integrated vertical slice is G5; a bounded far-terrain
+silhouette pass follows at G6 before the v1 release. Visual polish, executable mods,
+broad worldgen, and redstone are not first-playable dependencies.
 
 ## Prototype gate
 
@@ -58,7 +59,7 @@ The first-playable experiments should measure, rather than assume:
 - 16³ versus 32³ sparse sections, indexing, palettes, and serialized projections;
 - persistence durability/recovery under process kill, disk-full, read-only, corruption,
   writer stalls, and restore;
-- 20 Hz prediction/reconciliation around authoritative block edits;
+- fixed 60 TPS prediction/reconciliation around current-time authoritative block edits;
 - transport behavior under latency, loss, duplication, reordering, churn, malformed
   admission, and bounded congestion;
 - selected child-process loopback hosting in packaged builds, with the embedded adapter retained for conformance/fallback tests;
@@ -66,4 +67,5 @@ The first-playable experiments should measure, rather than assume:
 - strict loading, identity, and reproducibility of one resource-only base pack.
 
 Lighting pages, hot reload, redstone, broad worldgen, and mod isolation retain research
-gates but do not enter the first-playable critical path.
+gates but do not enter the first-playable critical path. Minimal fog-obscured far
+terrain is a post-slice v1 gate, not part of that first-playable critical path.

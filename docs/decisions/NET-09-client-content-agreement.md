@@ -8,6 +8,13 @@ Recommended choice: Servers publish a canonical required-content lock manifest; 
 
 One-sentence rationale: Content hashes give deterministic compatibility and local integrity for cooperating clients, but a hostile client can lie about possession or execution and remains subject to server authority.
 
+### Owner decision — 2026-08-13
+
+The owner accepted the recommended required-content lock and mismatch UX. This is a
+compatibility decision, not remote attestation. For saved gameplay-modded worlds,
+`GAME-01`/`WORLD-09` additionally require the server's resolved gameplay-content lock
+to match before normal world simulation opens.
+
 ## Context and constraints
 
 - The draft requires the server to assert that client-side mods are synchronized but not distribute them.

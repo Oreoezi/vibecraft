@@ -8,6 +8,21 @@ Recommended choice: Replace “DDoS safe” with a layered, measurable abuse-res
 
 One-sentence rationale: Application code can prevent cheap amplification and resource-exhaustion bugs, but it cannot keep a consumer Internet link usable when attack traffic saturates the link.
 
+### Owner direction — 2026-08-13
+
+For v1, one authenticated player/session must not be able to crash or materially stall
+a healthy server through supported actions, malformed packets, packet floods, chunk
+requests, or ordinary “lag machine” construction within configured limits. This is a
+testable resilience target, not an absolute claim against unknown vulnerabilities or
+link-saturating traffic. A session that persistently exceeds packet/work budgets is
+throttled and disconnected promptly.
+
+The safety property comes from bounded admission, generation, queues, simulation work,
+and plugin calls—not from assuming “threaded chunks” makes expensive gameplay free.
+Optional proof-of-work admission may be researched post-v1 for connection floods, but
+it is not a substitute for authentication, rate limits, or upstream mitigation and
+must account for weak/mobile clients and botnet parallelism.
+
 ## Context and constraints
 
 - The public server accepts unauthenticated UDP-originating traffic.
@@ -68,6 +83,10 @@ After authentication:
 - Plugins never execute on socket receive threads and cannot bypass budgets.
 - Compression refuses attacker-controlled extreme expansion before allocating the claimed output.
 - Overload degrades in order: optional telemetry/cosmetics, far chunks, low-priority entity snapshots, new admissions. Existing authoritative actions keep bounded service where possible.
+- Each authenticated session has an attributed maximum amount of admitted parse,
+  command, generation, circuit/block-update, plugin, and outbound work per interval.
+  No single session can borrow an unbounded global queue. Repeated exhaustion yields a
+  stable overload result and disconnect rather than tick-wide work multiplication.
 
 ### Observability
 
@@ -79,12 +98,20 @@ Expose counters/histograms for invalid packets by reason, bytes before/after val
 - Every network-controlled length/count has a tested upper bound before allocation.
 - No unauthenticated request can trigger plugin execution, world load, chunk generation, or a response exceeding the anti-amplification budget.
 - Operators receive documented upstream mitigation expectations and overload controls.
+- In the declared single-attacker corpus, one authenticated session cannot crash the
+  process, exceed hard memory/queue caps, or make the authoritative 60 TPS p99 deadline
+  fail for healthy existing sessions beyond the explicitly bounded recovery window.
 
 ## Prototype or benchmark
 
 Required: yes.
 
-Create a packet-flood harness covering random bytes, valid-header garbage, spoofable initial requests, handshake churn, replay, duplicate actions, compressed bombs, chunk-request floods, and slow readers. Measure allocations, CPU per packet, queue bounds, response amplification, and recovery after the flood stops.
+Create a packet-flood and authenticated-abuse harness covering random bytes,
+valid-header garbage, spoofable initial requests, handshake churn, replay, duplicate
+actions, compressed bombs, chunk-request floods, view-distance churn, block/circuit
+update attempts, plugin-command floods, and slow readers. Measure allocations, CPU
+and admitted work per principal, queue bounds, response amplification, healthy-player
+latency/tick health, disconnect time, and recovery after the flood stops.
 
 Initial pass targets:
 
@@ -93,6 +120,9 @@ Initial pass targets:
 - memory remains bounded under sustained input above service capacity;
 - simulation tick p99 recovers within five seconds after an application-layer flood ceases;
 - no crash, deadlock, or unbounded log growth.
+- one authenticated attacker is throttled/disconnected without causing a sustained
+  60 TPS deadline failure or disconnecting healthy sessions in the declared fixture;
+  freeze exact recovery/latency thresholds with target hardware and player load.
 
 Targets must be revised against actual hardware and player-count goals.
 
@@ -101,6 +131,8 @@ Targets must be revised against actual hardware and player-count goals.
 - QUIC can simplify crypto/congestion/address validation but may add runtime and datagram API constraints.
 - Residential hosting may remain vulnerable to simple bandwidth saturation regardless of application behavior.
 - Account authentication can itself become an external dependency and denial point.
+- Proof of work can penalize legitimate low-power clients while a distributed attacker
+  parallelizes it; evaluate it only as an optional admission layer with measurement.
 
 ## Dependencies
 
@@ -112,3 +144,5 @@ Targets must be revised against actual hardware and player-count goals.
 - Claiming the server is “DDoS-proof”: rejected as untestable and misleading.
 - Implementing custom cryptography: rejected for v1.
 - Unbounded queues to avoid dropping player data: rejected because they convert overload into latency and memory failure.
+- Mandatory v1 proof of work: deferred; first prove GNS admission, authentication,
+  per-session work budgets, and upstream responsibility.

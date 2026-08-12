@@ -8,7 +8,11 @@ This is a cross-cutting audit, not a binding architecture decision. Its purpose 
 
 Keep the product direction—Godot/C#, an authoritative standalone server, Minecraft-like survival, moddability—but stop treating the proposed implementation mechanisms as already decided. In particular, UDP, Protobuf for every message, 32/64/128 Hz simulation, “DDoS safe,” per-1/64-block lighting, unlimited height, and safe native mods are hypotheses or ambiguous goals, not requirements.
 
-The first implementation target should be a multiplayer vertical slice: start/load a world, connect, move, stream terrain, place and break blocks, save, crash/recover, and reconnect. Architectures for the Nether/End, broad mob sets, advanced materials, full redstone, procedural assets, and untrusted mods should not be allowed to block that slice.
+The owner has greenlit the first implementation target as a multiplayer vertical
+slice: start/load a world, connect, move, stream terrain, place and break blocks,
+save, crash/recover, and reconnect. Architectures for the Nether/End, broad mob sets,
+advanced materials, full redstone, procedural assets, and untrusted mods must not be
+allowed to block that slice.
 
 ## Findings
 
@@ -18,17 +22,23 @@ The first implementation target should be a multiplayer vertical slice: start/lo
 | --- | --- | --- |
 | UDP | Low-latency state plus dependable control/content transfer | Compare mature reliable-UDP, QUIC streams/datagrams, and a minimal custom protocol |
 | Protobuf | Evolvable typed messages | Use where suitable; benchmark size/CPU against packed state snapshots |
-| 32/64/128 tick | Responsive play under load | Choose simulation, input, snapshot, AI, redstone, and persistence rates independently |
-| No max height | No gameplay-visible fixed build ceiling | Sparse signed vertical sections with finite coordinate and implementation limits |
+| 32/64/128 tick | Responsive play under load | Owner-selected fixed 60 TPS world authority; measure capacity and choose packet/slower-system cadences independently |
+| No max height | A very tall world without dense empty columns | Sparse signed vertical sections; initial dimension policy is approximately 10,000 buildable blocks tall |
 | DDoS safe | Resist cheap amplification and resource exhaustion | Threat model, admission limits, stateless validation, observability, upstream mitigation |
 | Native mods with scoped permissions | Useful untrusted extensions with explicit capabilities | A sandboxed runtime or process boundary; native .NET is trusted-only |
 | 1/64-block lighting | High-frequency visual shading on 64×64 assets | GPU per-fragment shading; do not store a 64³ world-light lattice per block |
 
-### 2. The server tick target is prematurely fixed
+### 2. The server tick target is now an owner-selected product constraint
 
 At 32, 64, and 128 Hz, one tick has approximately 31.25 ms, 15.63 ms, and 7.81 ms respectively. Those are end-to-end deadlines for every synchronous activity assigned to the tick. A voxel sandbox also has chunk activation, block updates, entities, inventories, plugins, and persistence coordination, so a single global high-frequency tick would spend CPU on systems that do not benefit from it.
 
-Recommendation: use `WORLD-08`'s single 20 Hz `WorldTick` as the coherent v1 authority clock, with sequenced input, local prediction, and interpolation at render rate. Input and snapshot transmission may be paced independently, but packets do not create another authoritative clock. If a blind movement test shows a material problem, prototype a 40 Hz player-controller substep nested exactly twice inside each world tick. Do not expose 32/64/128 Hz whole-world profiles in v1.
+Owner decision: use `WORLD-08`'s single fixed **60 TPS** `WorldTick` as the v1
+authority clock, with sequenced input, local prediction, and interpolation at render
+rate. Input and snapshot transmission may be paced independently, and slower systems
+use deadlines/divisors without creating another authority clock. Do not expose
+user-selectable world-tick profiles. The capacity prototype must prove the declared
+workload can sustain the 16.67 ms nominal cadence; failure reduces scope or revises
+the architecture rather than silently slowing/changing gameplay time.
 
 The networking research should compare at least these transport strategies:
 
@@ -56,7 +66,13 @@ Recommendation: use Protobuf initially for handshake, capability, inventory, com
 
 Computers, coordinate fields, physics engines, floating-point rendering, databases, and save keys all have limits. The useful requirement is that world storage be sparse in the vertical dimension and not encode a small fixed stack of sections.
 
-Recommendation: use integer chunk coordinates `(x, y, z)` and fixed-size cubic sections; only allocated sections consume meaningful memory or disk. Expose a deliberately large, versioned safety range and keep rendering coordinates local to an origin. Luanti's engine documentation provides a concrete comparison point: its map is built from 16×16×16 MapBlocks and supports selectable map database backends ([basic structures](https://docs.luanti.org/for-engine-devs/basic-data-structures/), [database backends](https://docs.luanti.org/for-server-hosts/database-backends/)). Minecraft's Anvil transition is a warning against baking height into monolithic chunk layouts: it introduced vertical sections and omitted empty sections from memory/disk ([Anvil format summary](https://minecraft.wiki/w/Anvil_file_format)).
+Recommendation: use integer chunk coordinates `(x, y, z)` and fixed-size cubic
+sections; only allocated sections consume meaningful memory or disk. The initial
+dimension policy exposes an explicit build range approximately 10,000 blocks tall,
+while the save key remains sparse/signed and can survive a later policy expansion.
+Keep rendering coordinates local to an origin. Luanti's engine documentation provides
+a concrete comparison point: its map is built from 16×16×16 MapBlocks and supports
+selectable map database backends ([basic structures](https://docs.luanti.org/for-engine-devs/basic-data-structures/), [database backends](https://docs.luanti.org/for-server-hosts/database-backends/)). Minecraft's Anvil transition is a warning against baking height into monolithic chunk layouts: it introduced vertical sections and omitted empty sections from memory/disk ([Anvil format summary](https://minecraft.wiki/w/Anvil_file_format)).
 
 ### 5. The lighting statement has two radically different interpretations
 

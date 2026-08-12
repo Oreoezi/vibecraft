@@ -10,17 +10,44 @@ Related spec: [`../../design_doc.md`](../../design_doc.md)
 
 Recommended choice: Build server-owned, layered interest management over a three-dimensional section grid, with separate simulation, terrain, entity, event, and private-state scopes feeding a congestion-aware per-client priority scheduler.
 
-One-sentence rationale: An unbounded-height voxel world needs 3D relevance, while responsive play under UDP congestion requires near collision changes and action outcomes to outrank far terrain without letting low-priority state starve forever.
+One-sentence rationale: A roughly 10,000-block-tall sparse voxel world still needs 3D
+relevance, while responsive play under congestion requires near collision changes and
+action outcomes to outrank far terrain without letting low-priority state starve
+forever.
+
+### Owner review status — 2026-08-13
+
+This recommendation is **not owner-greenlit yet**. The owner requested a more concrete
+discussion before choosing it. In player-facing terms, the proposal currently means:
+
+- walking moves a server-owned 3D bubble of full block data; terrain ahead is queued
+  before terrain behind, but the client cannot point the bubble somewhere else;
+- simulation distance, full-detail terrain distance, entity distance, event distance,
+  and far-terrain distance are separate knobs, so a distant hill does not activate its
+  mobs or reveal its interiors;
+- a teleport discards the old streaming epoch, loads only the collision-safe landing
+  area first, then expands outward;
+- when bandwidth or server load is tight, cosmetic/far terrain degrades first while
+  corrections, actions, nearby collision, inventory, and player state retain priority;
+- the server clamps advertised/requested distances and may reduce them under pressure.
+
+Before approval, discuss the desired default distances, how visibly servers may clamp
+them, how much pop-in is acceptable behind fog, spectator/map exceptions, and whether
+the five-scope split is understandable in operator UI. The prototype can test the
+mechanism meanwhile, but its current ellipsoid/radii are not product promises.
 
 Godot scene visibility may consume the resulting client state, but it is not the authority or server interest model. Far LoD is a separate coarse representation; it must not subscribe a client to full blocks, entities, or simulation at LoD distance.
 
 ## Context and constraints
 
-- The world design rejects a fixed maximum height and describes “square chunks”; this brief interprets that as cube-like 3D storage sections. WORLD-01 must confirm dimensions and terminology.
-- A fixed vertical column subscription, as used by Minecraft Java, becomes unbounded if the world truly has no maximum height. Both horizontal and vertical full-detail interest therefore need explicit caps.
+- `WORLD-01` now uses sparse 3D sections and an initial build range approximately
+  10,000 blocks tall. Streaming a whole vertical column would still be hundreds of
+  sections, so horizontal and vertical full-detail interest need explicit caps.
 - Chunk generation/loading, mesh preparation, entity replication, block deltas, sounds, particles, inventory, and action acknowledgements compete for CPU and bandwidth.
 - Client prediction needs collision-critical nearby changes promptly. A far chunk transfer must never head-of-line block a correction or input acknowledgement.
-- UDP provides no congestion control by itself. Interest management is not merely an optimization; it is part of a safe Internet transport design.
+- A UDP-based transport requires real congestion control. The selected GNS foundation
+  supplies transport behavior, while interest management still decides which game
+  state is worth producing/sending under that bounded capacity.
 - Client-provided view distance, camera, throughput feedback, and subscription requests are untrusted hints. The server derives the interest center from authoritative state and applies limits.
 - Full-resolution 3D visibility grows cubically. A spherical radius of 12 sections contains roughly 7,238 grid cells before culling, versus roughly 452 positions in a 2D disk. “No max height + very far full-detail render + high tick rate” is internally incompatible without vertical limits and LoD.
 
@@ -29,8 +56,8 @@ Godot scene visibility may consume the resulting client state, but it is not the
 | Option | Strengths | Costs/risks | Fit for VibeCraft |
 | --- | --- | --- | --- |
 | A. Broadcast all relevant world/entity changes to every client | Minimal logic; easy early prototype | Bandwidth and information leak scale with world/player count; no far-world feasibility | Rejected except tiny test maps |
-| B. Minecraft-style horizontal columns and one view distance | Familiar and simple; good for bounded-height worlds | A column is unbounded here; conflates terrain, entities, and simulation; cannot prioritize domains well | Poor fit |
-| C. One 3D radius controls loading, ticking, terrain, entities, and events | Supports unbounded height with one rule | Rendering choices dictate simulation cost; private/global state awkward; churn and over-replication | Better than B, still too coupled |
+| B. Minecraft-style horizontal columns and one view distance | Familiar and simple; good for short bounded-height worlds | A full approximately 10,000-block column is still too large; conflates terrain, entities, and simulation; cannot prioritize domains well | Poor fit |
+| C. One 3D radius controls loading, ticking, terrain, entities, and events | Supports tall sparse worlds with one rule | Rendering choices dictate simulation cost; private/global state awkward; churn and over-replication | Better than B, still too coupled |
 | D. Layered 3D scopes plus budgeted priority/aging | Explicit cost controls; supports LoD and differing system needs; graceful congestion behavior | More state machines, acknowledgements, and observability required | **Recommended** |
 
 ## Evidence
@@ -81,7 +108,7 @@ Each connection has a server-owned `InterestState`:
 epoch                    // changes on teleport/dimension transfer
 center_section           // derived from authoritative player position
 horizontal_full_radius   // client hint clamped by server/mode
-vertical_full_radius     // independently clamped; mandatory for unbounded height
+vertical_full_radius     // independently clamped; mandatory for the tall sparse world
 entity_radius
 simulation_radius        // server policy, not a client preference
 enter_set / retained_set
@@ -188,7 +215,8 @@ These are prototype defaults, not promises for shipped render distance. Servers 
 - The prototype proves baseline/delta/spawn ordering under loss, reordering, movement, stationary distance changes, and teleport epochs.
 - NET-03 exposes queue/rate statistics and one congestion-controlled connection; application admission is conservative and priority cannot bypass it.
 - The load prototype meets the latency, CPU, bandwidth, and memory thresholds below without starvation.
-- Product accepts independent vertical full-detail limits as mandatory for an unbounded-height world.
+- Product still needs to review/accept independent vertical full-detail limits for the
+  10,000-block-tall sparse world.
 
 ## Prototype or benchmark
 
@@ -209,7 +237,9 @@ Success metrics:
 - when the congestion controller has at least one MTU available, P0/P1 p99 application-queue delay is no more than one network snapshot interval; no guarantee is made while the path exposes zero send capacity;
 - movement admission waits only for a measured **collision envelope**: the containing section plus the neighbor cells/shapes the controller can reach before the next streaming deadline. Settling time must satisfy `transmitted_bytes * 8 / usable_bitrate` plus measured protocol/decode/application margin; do not require 27 full section baselines in 500 ms at 2 Mbit/s;
 - every continuously relevant P2 entity receives a state refresh within two seconds under the 512 kbit/s test, while P3/P4 degrade instead of starving it;
-- report p50/p95/p99 interest diffing, scheduling, and serialization cost for the declared acceptance load and a separate stress fixture against the 20 Hz world budget; set a production percentage only after target hardware/workload are fixed;
+- report p50/p95/p99 interest diffing, scheduling, and serialization cost for the
+  declared acceptance load and a separate stress fixture against the 60 TPS world
+  budget; set a production percentage only after target hardware/workload are fixed;
 - bounded queued application data stays below 8 MiB per client; leaving-interest and teleport tests release/cancel old bulk work within one second;
 - application producers remain within configured queue/admission caps and react to transport queue age without unbounded growth; packet captures report actual delivered/wire rates;
 - malformed requests never allocate or queue work beyond configured caps and do not increase simulation scope.
@@ -231,7 +261,8 @@ Success metrics:
 
 ## Rejected or deferred alternatives
 
-- Horizontal column subscriptions with unlimited vertical content: rejected because their cost is unbounded under the stated world model.
+- Whole-build-range horizontal column subscriptions are rejected because their cost is
+  excessive and poorly prioritized even under the finite initial height policy.
 - Client-selected interest center: rejected outside authorized spectator mode because it enables information leaks and generation/IO abuse.
 - One radius for render, simulation, entities, and events: rejected because it couples graphics preference to server CPU and bandwidth.
 - Pure frustum/occlusion AOI: rejected for gameplay state; players need nearby collision and events behind the camera or walls.

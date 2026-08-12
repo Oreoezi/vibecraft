@@ -12,7 +12,13 @@ Recommended choice: Use CPU-built, section-local indexed meshes with hidden-face
 
 One-sentence rationale: This is the smallest architecture that substantially reduces geometry, handles editable terrain and arbitrary-height 3D chunks, and leaves room for custom models and later GPU packing without making the first playable build depend on experimental rendering techniques.
 
-This recommendation is **Proposed**, not greenlit, until the benchmark below validates C# throughput and Godot upload cost. Binary greedy meshing, GPU meshing, mesh shaders, and ray-cast voxels are optimizations behind measured bottlenecks, not v1 requirements.
+### Owner decision — 2026-08-13
+
+The owner accepted the recommended architecture: section-local CPU meshes,
+hidden-face correctness baseline, greedy full-cube fast path, immutable non-cube
+templates, and no Godot objects in worker meshing. Throughput, exact section side,
+vertex format, and upload backend remain benchmark gates. Binary/GPU meshing, mesh
+shaders, and ray-cast voxels remain optimizations behind measured bottlenecks.
 
 ## Context and constraints
 

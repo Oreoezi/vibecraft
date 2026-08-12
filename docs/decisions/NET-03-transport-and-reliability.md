@@ -7,7 +7,13 @@ Date researched: 2026-08-09
 Related spec: [`../../design_doc.md`](../../design_doc.md)  
 Parent decisions: [`NET-01-network-simulation-model.md`](NET-01-network-simulation-model.md), [`NET-02-movement-prediction-reconciliation.md`](NET-02-movement-prediction-reconciliation.md)
 
-Recommended choice: Greenlight a VibeCraft-owned message transport abstraction and three bounded semantic traffic classes, while treating Valve GameNetworkingSockets (GNS) as the first **prototype candidate**, not the selected production transport. Start with one 20 Hz input bundle and at most one coalescible snapshot per `WorldTick`. Public direct-IP use remains blocked until authenticated peer identity/channel binding, native ownership, admission cost, lane behavior, and packaging pass measurement. Do not fall back to an improvised UDP protocol.
+Owner-selected choice: Use Valve GameNetworkingSockets (GNS) as the default transport
+implementation behind a VibeCraft-owned message abstraction and three bounded semantic
+traffic classes. Process 60 TPS input frames with bounded redundant bundles and begin
+snapshot generation at a measured 20/30 Hz divisor. Public direct-IP use remains
+blocked until authenticated peer identity/channel binding, native ownership,
+admission cost, lane behavior, and Windows/Linux packaging pass measurement. Do not
+fall back to an improvised UDP protocol.
 
 ## Decision
 
@@ -15,9 +21,20 @@ VibeCraft will expose a message-oriented transport abstraction that is independe
 
 The game protocol, authorization, serialization, interest management, snapshot deltas, replay protection, and application-level transaction semantics remain VibeCraft responsibilities. GNS encryption does not establish that a player owns a VibeCraft account, make an arbitrary direct-IP server trustworthy, or stop volumetric denial-of-service traffic. Those claims require application authentication, server identity policy, pre-auth resource limits, and possibly upstream relay or hosting protection.
 
-The rates in the current spec are research questions, not quality presets. `WORLD-08` owns one 20 Hz authoritative clock. `NET-06` may change packet batching/coalescing or test an exactly nested movement substep, but transport configuration cannot create a second gameplay timeline.
+The world rate is no longer a transport research question: `WORLD-08` owns one fixed
+60 TPS authoritative clock. `NET-06` may change packet batching, snapshot cadence,
+and coalescing, but transport configuration cannot create a second gameplay timeline.
 
 One-sentence rationale: Mature transport mechanisms are worth prototyping, but VibeCraft must prove GNS's C#/Godot packaging and public trust path while preserving application-level authority, ordering, backpressure, and a viable replacement seam.
+
+### Owner decision — 2026-08-13
+
+Use the mature GNS implementation and keep the project focused on game semantics
+rather than inventing reliability, congestion, encryption, and NAT machinery. GNS can
+operate standalone; Steam Datagram Relay features are not a v1 dependency. The
+prototype is now an acceptance/integration gate for the selected implementation, with
+the abstraction retained in case packaging or trust requirements produce a measured
+showstopper.
 
 ## Context and constraints
 
@@ -130,7 +147,10 @@ The following is a planning model, not measured GNS overhead. It assumes one mes
 
 For 32 clients each receiving a hypothetical 1000-byte snapshot, server outbound traffic is approximately 4.358 Mbps at 16 Hz, 8.716 Mbps at 32 Hz, 17.433 Mbps at 64 Hz, and 34.865 Mbps at 128 Hz. This excludes retransmissions, chunk streaming, control traffic, voice, and provider overhead. Delta compression and interest management may reduce payload sizes, while loss may increase them. The useful conclusion is the linear scaling, not the assumed packet size.
 
-Inference: start the integrated prototype with one 20 Hz redundant input bundle and no more than one coalescible snapshot per world tick. NET-06 must replace illustrative payload assumptions with representative captures and perceptual tests before changing packet cadence.
+Inference: start the integrated prototype with 60 TPS logical input frames sent in
+bounded redundant bundles and a separately measured 20/30 Hz coalescible snapshot
+cadence. `NET-06` must replace illustrative payload assumptions with representative
+captures and perceptual tests before freezing packet cadence.
 
 ## Proposed design and interfaces
 
@@ -230,7 +250,11 @@ Build a disposable transport harness before integrating world simulation:
 
 1. Pin a reviewed GNS revision and build its native library for Windows x64 and Linux x64; add macOS for V1 if it remains a launch target. Generate or hand-maintain only the required P/Invoke declarations from the official flat header.
 2. Connect a minimal Godot C# client to a standalone C# server. Exercise connect, authenticated server-key/channel-binding hook, all three traffic classes, cross-lane reorder, disconnect, reconnect, stale-epoch suppression, and process shutdown.
-3. Run the declared acceptance load plus a separate 64-peer stress fixture. Each peer sends a 24–40 byte input bundle at 20 Hz and receives at most one coalescible snapshot per world tick while a 10 MiB paced bulk object and periodic reliable control messages share the connection.
+3. Run the declared acceptance load plus a separate 64-peer stress fixture. Each peer
+   produces 60 TPS input frames and initially sends a 24–80 byte redundant bundle up
+   to 60 times/s; snapshots begin at 20/30 Hz while a 10 MiB paced bulk object and
+   periodic reliable control messages share the connection. Measurement may batch
+   input sends downward without changing logical frames.
 4. Test 0–250 ms RTT, variable jitter, 0%, 1%, 5%, and 10% loss, reordering, duplication, and constrained bandwidth using GNS simulation plus an external network emulator where available.
 5. Capture actual wire bytes, retransmissions, message queue age, lane latency, native/managed allocations, GC pauses, CPU, disconnect reasons, and baseline recovery.
 6. Fuzz envelopes and state transitions; send oversized lengths, invalid versions, connection floods, stalled handshakes, duplicate commands, and disconnects during bulk transfer.
@@ -273,7 +297,7 @@ If GNS fails native deployment, lifetime safety, or latency isolation after one 
 
 ## Dependencies
 
-- `ARCH-01`/`WORLD-08` define authority and the 20 Hz `WorldTick`; `NET-06` owns packet-cadence experiments.
+- `ARCH-01`/`WORLD-08` define authority and the 60 TPS `WorldTick`; `NET-06` owns packet-cadence experiments.
 - NET-02 defines input redundancy, snapshot sequencing, reconciliation, and transaction idempotence.
 - NET-06 must measure serialization, interest management, payload distributions, compression, CPU, and rate profiles.
 - NET-07 owns protocol/version compatibility and schema evolution details.
@@ -285,9 +309,8 @@ If GNS fails native deployment, lifetime safety, or latency isolation after one 
 ## Rejected or deferred alternatives
 
 - **Custom UDP + Protobuf:** rejected. Protobuf is a payload codec, not congestion control, encryption, reliability, admission, MTU handling, or operational telemetry.
-- **64/128 Hz authoritative world simulation:** rejected for v1. It multiplies
-  packet/history/CPU cost and cannot overcome Internet RTT by itself. Later packet
-  cadence experiments do not change the 20 Hz `WorldTick`; any future simulation-rate
+- **Alternate/configurable authoritative world rates:** rejected for v1. Packet cadence
+  experiments do not change the fixed 60 TPS `WorldTick`; any future simulation-rate
   change requires a new architecture and compatibility decision.
 - **TCP-only gameplay:** rejected for the realtime path because retransmission-induced stream ordering can delay newer state behind old loss. It remains acceptable for external control-plane services where latency supersession is irrelevant.
 - **QUIC through `System.Net.Quic`:** deferred until a supported managed DATAGRAM API and game-specific benchmarks exist, or until native MsQuic integration is justified.

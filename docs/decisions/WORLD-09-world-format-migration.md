@@ -122,10 +122,15 @@ If a bug fix must modify existing terrain, implement it as an explicit terrain m
 ### Registries and missing mods
 
 - Persistent records use namespaced IDs plus a saved registry snapshot/mapping.
-- Missing content becomes an explicit unresolved placeholder retaining original ID and payload.
+- A normal gameplay open compares the required gameplay-content lock before
+  activating sections. Missing or incompatible required content aborts with a report
+  and zero world writes; it does not enter simulation with placeholders.
+- An explicit read-only recovery/export path may represent missing content as an
+  unresolved placeholder retaining original ID and payload.
 - Unknown mod-owned records are preserved as bounded opaque bytes when their container is understood.
 - A mod may provide migration functions only for its namespace, with time/memory quotas and no access to unrelated records.
-- Removing a mod requires an explicit cleanup/export decision; loading without it does not silently erase data.
+- Removing a mod requires an explicit cleanup/export/migration decision with backup;
+  loading without it does not silently erase data or enter gameplay.
 
 ### Reader/writer policy
 
@@ -138,7 +143,8 @@ If a bug fix must modify existing terrain, implement it as an explicit terrain m
 
 - Network, pack, mod ABI, generator, and world-record versions are separate concepts in code and docs.
 - Golden fixtures exist for every supported old record version.
-- Missing mod data survives a load-save cycle byte-for-byte where the container permits preservation.
+- Missing required mod data causes zero-write gameplay-open refusal. Recovery/export
+  decoding preserves it byte-for-byte where the container permits preservation.
 - Unsupported newer worlds are never modified.
 - Generator updates do not regenerate already-generated authoritative sections.
 - Major migration estimates disk requirements and preserves a recoverable source copy.
@@ -147,7 +153,7 @@ If a bug fix must modify existing terrain, implement it as an explicit terrain m
 
 Required: yes.
 
-Build three versions of a toy section/entity/block-entity schema. Test direct and chained migration, mixed-version records, unknown fields/record kinds, missing mod records, corrupt checksums, cancellation, and process termination before/after commit. Run a bulk migration to a separate destination and verify source immutability plus restartable progress.
+Build three versions of a toy section/entity/block-entity schema. Test direct and chained migration, mixed-version records, unknown fields/record kinds, zero-write refusal for missing required mods, read-only recovery/export of missing records, corrupt checksums, cancellation, and process termination before/after commit. Run a bulk migration to a separate destination and verify source immutability plus restartable progress.
 
 Pass condition: every interruption yields either the prior valid record/world or the fully validated new one; no fixture is silently defaulted; opening an unsupported future major performs zero writes.
 

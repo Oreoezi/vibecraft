@@ -9,6 +9,11 @@ Scope: `design_doc.md`, `FOUNDATION-00`, `ARCH-01` through `ARCH-04`, `NET-01` t
 > descriptions and the edit matrix as historical red-team evidence; current authority
 > is [`INTEGRATION-RESOLUTIONS.md`](INTEGRATION-RESOLUTIONS.md) plus the proposed
 > requirements baseline.
+>
+> **Owner update, 2026-08-13:** `questions2.md` selected fixed 60 TPS,
+> standalone GNS, and receive-time/current-state action validation. Any 20 Hz,
+> nested-controller, or GNS-as-candidate recommendation below is superseded rather
+> than a current implementation choice.
 
 ## Verdict
 

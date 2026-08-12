@@ -14,10 +14,18 @@ One-sentence rationale: A bounded queue makes every block behavior safe and repl
 
 “Pre-1.5 redstone” is a content/style target, not an implementation specification. VibeCraft v1 includes dust, levers, buttons/plates, torches, repeaters, doors/trapdoors, lamps, and basic pistons. It does not promise Java's quasi-connectivity, block-update detection accidents, update suppression, duplication, zero-tick behavior, or orientation/location-specific order.
 
+### Owner decision — 2026-08-13
+
+The owner delegated this subsystem to the recommended design. Greenlight the
+deterministic non-recursive update queue, whole-network dust solve, explicit face-port
+devices, persisted scheduled transitions, and bounded work direction. Exact gameplay
+limits and device timing still require fixtures; accidental Minecraft bugs are not a
+compatibility target.
+
 ## Context and constraints
 
-- `WORLD-08` chooses a 20 Hz world clock, one authoritative writer, persisted scheduled ticks, deterministic phases, and bounded immediate work.
-- `ARCH-01`, `NET-01`, and `WORLD-08` now share one 20 Hz authoritative
+- `WORLD-08` chooses a 60 TPS world clock, one authoritative writer, persisted scheduled ticks, deterministic phases, and bounded immediate work.
+- `ARCH-01`, `NET-01`, and `WORLD-08` now share one 60 TPS authoritative
   `WorldTick`. Input, snapshot, and rendering cadence may differ, but they never
   rescale device delays or create another gameplay clock.
 - Circuits cross 16³ section boundaries, can remain unloaded for hours, and can intentionally oscillate forever.
@@ -147,19 +155,21 @@ Large-network discovery/evaluation reserves its full node/write budget before pu
 
 ### Explicit v1 device semantics
 
-All times are 20 Hz world game ticks. These are VibeCraft rules, even where the values feel familiar.
+All times are 60 TPS world game ticks. The table converts the former 20 TPS proposal
+to preserve elapsed durations; these are VibeCraft rules even where values feel
+familiar.
 
 | Component | Inputs and output | Transition rule |
 | --- | --- | --- |
 | Dust | Connected ports; output level `0..15` | Final network solve; attenuates one level per dust edge |
 | Lever | Player toggle; level 15 | Output changes in the committing root tick |
-| Button | Player press; level 15 | Turns on immediately; one persisted release tick at `T+20`; another press resets due time |
-| Pressure plate | Entity overlap; level 15 | Edge-driven occupancy plus deterministic rescan every 10 ticks while active; off when count reaches zero |
-| Torch/inverter | Rear input; level 15 to all allowed non-rear ports | Desired output is inverse of rear input, committed after 2 ticks; newer desired state coalesces pending transition; no torch burnout in v1 |
-| Repeater | Rear input; side lock inputs; forward level 15 | Rising/falling target commits after configured 2/4/6/8 ticks; side power freezes current output and pending countdown until unlocked |
+| Button | Player press; level 15 | Turns on immediately; one persisted release tick at `T+60`; another press resets due time |
+| Pressure plate | Entity overlap; level 15 | Edge-driven occupancy plus deterministic rescan every 30 ticks while active; off when count reaches zero |
+| Torch/inverter | Rear input; level 15 to all allowed non-rear ports | Desired output is inverse of rear input, committed after 6 ticks; newer desired state coalesces pending transition; no torch burnout in v1 |
+| Repeater | Rear input; side lock inputs; forward level 15 | Rising/falling target commits after configured 6/12/18/24 ticks; side power freezes current output and pending countdown until unlocked |
 | Lamp | Any accepted adjacent input | Lit state changes after the complete circuit batch, with no extra delay |
 | Door/trapdoor | Any accepted input plus optional manual latch | `open = powered || manualLatch`; iron-like variants disallow manual latch; paired door blocks update atomically |
-| Piston | Any accepted adjacent input except the front | Rising/falling edge schedules action at `T+1`; push line limit 12; no slime/honey behavior in v1; blocked move leaves piston state unchanged |
+| Piston | Any accepted adjacent input except the front | Rising/falling edge schedules action at `T+3`; push line limit 12; no slime/honey behavior in v1; blocked move leaves piston state unchanged |
 
 - A scheduled transition stores expected component type/state, desired output, due tick, root sequence, and component revision. Replacing a device invalidates the transition.
 - Multiple pending transitions for the same device/type coalesce only according to its table rule. No generic “last callback wins.”
@@ -235,13 +245,18 @@ Success metrics:
 
 - Final-state and replay criteria above pass across 100 seeds and worker counts 1/2/4.
 - A 10,000-wire grid recompute is at least 5x faster and performs at least 10x fewer block-state writes/neighbor notifications than the naive solver on the baseline CPU.
-- A maximum 65,536-wire solve completes below 20 ms p95 with under 8 MiB temporary allocation after warm-up; if it fails, lower the gameplay limit or move snapshot-safe computation off-thread before greenlight.
-- A representative active area containing 100 independent clocks, 10,000 idle wires, and 1,000 ordinary neighbor-dependent blocks keeps the entire world tick below 50 ms p99 for 30 minutes.
+- A maximum 65,536-wire solve completes below 20 ms p95 total with under 8 MiB
+  temporary allocation after warm-up, but continuation limits keep any one 60 TPS
+  world step within its circuit work budget. If it fails, lower the gameplay limit or
+  move snapshot-safe computation off-thread before greenlight.
+- A representative active area containing 100 independent clocks, 10,000 idle wires,
+  and 1,000 ordinary neighbor-dependent blocks keeps the entire world step below the
+  16.67 ms cadence at p99 for 30 minutes on the declared server fixture.
 - Every persistence fault produces an allowed old/new state and no duplicate piston/block-entity identity.
 
 ## Risks and open questions
 
-- The integrated baseline selects a fixed 20 Hz world-logic clock plus independently
+- The integrated baseline selects a fixed 60 TPS world-logic clock plus independently
   tunable input/snapshot cadence. Reopening the authoritative world rate requires a
   new decision, device timing table, replay contract, and compatibility version.
 - Fixed face order can still make simultaneous conflicting actions orientation-dependent even though wire strength is not. Flow-relative external notification should be tested with players before locking the compatibility version.

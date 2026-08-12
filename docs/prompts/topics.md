@@ -14,19 +14,17 @@ Use each line as the `Research topic` in [`master.md`](master.md). Keep one topi
 
 - `NET-01` — Compare authoritative server, client authority, lockstep, rollback, and hybrid simulation.
 - `NET-02` — Design movement prediction, reconciliation, animation-state validation, and anti-cheat boundaries.
-- `NET-03` — Compare UDP reliability strategies, including custom channels, ENet, QUIC, and RakNet-like designs.
-- `NET-04` — Design lag compensation for movement, block edits, combat, and interactions near changing terrain.
-- `NET-05` — Design interest management and prioritization for chunks, entities, updates, sounds, and inventories.
-- `NET-06` — Compare one 20 Hz authoritative world clock, independently paced
-  input/snapshots, and an optional exactly nested 40 Hz player-controller experiment;
-  retain 32/64/128 Hz whole-world profiles only as rejected cost comparisons.
-- `NET-07` — Design protocol versioning, capability negotiation, feature flags, and Protobuf evolution.
-- `NET-08` — Research DDoS resistance, admission control, rate limiting, validation, and safe server exposure.
+- `NET-03` — Validate standalone GameNetworkingSockets behind a narrow transport adapter: channels, backpressure, packaged deployment, metrics, and failure handling; exclude custom UDP and Steam Datagram Relay.
+- `NET-04` — Specify current-authoritative-time validation for v1 block edits and combat, while reserving a negotiated post-v1 subtick/action-timestamp seam without building rewind history now.
+- `NET-05` — Explain and test the player-visible interest rules: which nearby chunks/entities are guaranteed, what may be delayed, how priorities change during fast movement or teleport, and how memory/bandwidth overload degrades without holes or stale state. Keep this owner-reviewable before selecting constants.
+- `NET-06` — Validate one fixed 60 TPS authoritative world loop with independently paced input packets, snapshots, chunk work, saves, and slower systems; retain 20/32/40/64/128 Hz only as historical or rejected cost comparisons.
+- `NET-07` — Design protocol versioning, capability negotiation, feature flags, Protobuf evolution, and a post-v1 authenticated server-transfer offer that reconnects through the normal handshake.
+- `NET-08` — Research DDoS resistance, admission control, rate limiting, validation, and safe server exposure, including the invariant that one authenticated session cannot exhaust the simulation, chunk, plugin, or outbound-work budgets. Treat proof-of-work as an optional post-v1 admission layer.
 - `NET-09` — Design client-mod manifests, hashes, required/optional mods, compatibility, and join failure UX.
 
 ## World, chunks, and persistence
 
-- `WORLD-01` — Compare chunk dimensions and section-based storage for worlds without fixed maximum height.
+- `WORLD-01` — Compare chunk dimensions and section-based storage for an initial approximately 10,000-block build range whose exact minimum/maximum split remains configurable in the world descriptor.
 - `WORLD-02` — Design chunk-generation scheduling, worker pools, priorities, cancellation, and dependencies.
 - `WORLD-03` — Compare region files, columnar formats, key-value stores, append-only logs, and custom binary storage.
 - `WORLD-04` — Design crash-safe saves using journaling, copy-on-write, atomic renames, logs, checksums, and recovery.
@@ -39,10 +37,10 @@ Use each line as the `Research topic` in [`master.md`](master.md). Keep one topi
 ## Rendering and lighting
 
 - `RENDER-01` — Compare greedy meshing, face culling, binary geometry, clipmaps, mesh shaders, and voxel alternatives.
-- `RENDER-02` — Design mesh rebuild scheduling, worker synchronization, and GPU upload flow.
-- `RENDER-03` — Compare impostors, hierarchical LoD, simplified meshes, and clipmaps for far chunks.
+- `RENDER-02` — Explain mesh rebuild scheduling in player-visible terms, then prototype worker cancellation, stale-result rejection, main-thread GPU upload, and bounded queues. Keep backend/thread-count constants pending owner review and measurement.
+- `RENDER-03` — Select the smallest fog-obscured far-terrain silhouette representation that can ship after the first playable but before v1; compare universal 3D mips with cheaper per-dimension representations and defer high-fidelity/extreme-distance LoD.
 - `RENDER-04` — Compare flood fill, voxel cone, sparse voxel, screen-space, and hybrid lighting models.
-- `RENDER-05` — Evaluate 64 subdivisions per block versus per-voxel, per-face, vertex, texel, or probe lighting.
+- `RENDER-05` — Implement two block-scale server gameplay-light values (sky and emitted, each 0–15) and compare client interpolation/filtering methods that make them appear smooth without changing authoritative resolution.
 - `RENDER-06` — Design emissive, reflective, transparent, and refractive materials without destroying batching.
 - `RENDER-07` — Design fog and atmospheric rendering for caves, weather, Nether-like spaces, and far terrain.
 
@@ -59,5 +57,5 @@ Use each line as the `Research topic` in [`master.md`](master.md). Keep one topi
 
 ## Gameplay systems
 
-- `GAME-01` — Design block/item/entity registries and data models for early gameplay plus future extensibility.
+- `GAME-01` — Design separate typed, namespaced block/item/entity registries with uint32 runtime IDs, sparse per-position custom data, deterministic manifests, and strict saved-world content locks: normal play must refuse to open a world when a required mod is missing.
 - `GAME-02` — Design pre-1.5 redstone and block updates with a path toward modern redstone.

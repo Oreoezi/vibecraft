@@ -8,6 +8,14 @@ Recommended choice: Version the wire protocol with a small incompatible `protoco
 
 One-sentence rationale: This gives VibeCraft deliberate compatibility without committing to permanent translation for every historical client or conflating the network protocol with saves, packs, mods, and gameplay versions.
 
+### Owner direction — 2026-08-13
+
+Post-v1 networking should support native proxies and authenticated server transfer: a
+player may connect to one public address such as `vibepixel.net` and be routed to a
+regional backend. V1 does not need the service, but protocol/session boundaries must
+not assume one transport connection or backend process lasts for the entire login.
+Never trust client-supplied forwarding headers or unauthenticated redirect endpoints.
+
 ## Context and constraints
 
 - Client and dedicated server may update independently.
@@ -95,18 +103,57 @@ Core capability IDs use names such as `vibecraft:chunk_palette/1`; mods use thei
 
 During early development, support one protocol major at a time. After public releases, servers support the current major and optionally one previous major only if a maintained adapter and conformance suite exist. Compatibility is a release decision, not an automatic requirement.
 
+### Future proxy and server-transfer seam
+
+Reserve the state-machine/capability seam, not field numbers or an implementation, for
+`vibecraft:server_transfer/1`:
+
+```text
+ServerTransferOffer {
+  transfer_id
+  endpoint
+  expected_server_identity
+  single_use_handoff_token
+  expires_at
+  reason
+  required_content_lock_digest?
+}
+```
+
+- The offer arrives over the authenticated current session. The client displays or
+  follows only policy-allowed endpoints and verifies the destination identity before
+  presenting the handoff token.
+- The token is short-lived, single-use, audience-bound to the destination, and does
+  not expose the player's reusable credential. Failure returns to a safe menu or the
+  original service when explicitly supported; it never loops redirects indefinitely.
+- Destination admission reruns protocol/capability/content agreement. A transfer is a
+  new authority/session epoch, not an in-place mutation of connection identity.
+- A trusted edge proxy may assert original connection/account metadata only through a
+  cryptographically authenticated proxy-to-backend channel and explicit trust list.
+  Client packets that imitate proxy metadata are rejected.
+- Transparent packet forwarding, regional selection, account handoff, and fleet
+  control remain post-v1 services. The gameplay protocol merely preserves clean
+  reconnect/epoch semantics and does not bake a specific proxy vendor into messages.
+
 ## Greenlight criteria
 
 - A written change matrix classifies additive, capability-gated, and major-breaking changes.
 - Old-client/new-server and new-client/old-server fixtures cover every supported combination.
 - Downgrade, unknown-critical-message, and malformed-length tests fail closed.
 - Network, world, pack, and mod versions are represented separately in interfaces.
+- Disconnect/reconnect/session epoch APIs can represent a future authenticated
+  transfer without preserving stale action IDs, interest epochs, or content maps.
 
 ## Prototype or benchmark
 
 Required: yes.
 
-Build two toy protocol revisions. Demonstrate additive fields, an optional capability, a required capability, a removed/reserved field, and a major mismatch. Keep captured binary fixtures in tests and verify parsing/round trips across both supported implementations.
+Build two toy protocol revisions. Demonstrate additive fields, an optional capability,
+a required capability, a removed/reserved field, and a major mismatch. Keep captured
+binary fixtures in tests and verify parsing/round trips across both supported
+implementations. Add a state-machine-only transfer fixture using fake authenticated
+endpoints/tokens to prove old action/interest/content epochs cannot leak across the
+new connection; this does not implement a production proxy.
 
 ## Risks and open questions
 

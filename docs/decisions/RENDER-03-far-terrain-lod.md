@@ -8,20 +8,36 @@ Related spec: [`../../design_doc.md`](../../design_doc.md)
 
 ## Decision
 
-Recommended choice: Ship the first playable build with finite full-detail section rendering plus fog, while preserving an LoD-aware render key and source interface. Prototype the later far renderer as a sparse **3D power-of-two voxel mip pyramid** derived by the authoritative server from generated world state, meshed into coarse blocky sections and selected in balanced camera-centered rings with hysteresis, overlap, and transition skirts.
+Owner-selected outcome: Ship the first end-to-end playable with finite full-detail
+sections plus fog, then require a deliberately modest fog-obscured far-terrain layer
+before the v1 release. Preserve an LoD-aware render key/source interface and prototype
+the simplest bounded derived representation that works; a sparse **3D power-of-two
+voxel mip pyramid** remains the leading universal candidate, not a pre-approved quality
+project.
 
-One-sentence rationale: A separate 3D summary preserves VibeCraft's block silhouette, caves, edits, and unbounded vertical sections better than heightfields or automatic mesh decimation, but the networking, cache, seam, memory, and material-loss risks are too high to place it on the first-playable critical path.
+One-sentence rationale: Distant terrain is part of the desired v1 world scale, but
+heavy fog and low-detail silhouettes let it ship after the vertical slice without
+requiring beautiful transitions, full materials, hidden interiors, or an extreme
+horizon.
 
 This is a staged decision:
 
-- **V1 greenlight target:** no far-world data system; render ordinary sections to a measured radius and terminate them with fog.
-- **Post-v1 experiment target:** 3D mip summaries at 2× scale steps, initially to a 2,048-block horizon.
-- **Production far rendering:** remains `Needs experiment` in substance even though this brief's status vocabulary is `Proposed`. Do not promise arbitrary or “infinite” render distance.
+- **First-playable target:** no far-world data system; render ordinary sections to a
+  measured radius and terminate them with fog.
+- **V1 release target:** bounded coarse terrain beyond the near radius, visibly
+  softened/terminated by fog, with cheap material classes and graceful fog fallback.
+  The exact representation and horizon remain prototype outputs.
+- **Post-v1 quality target:** extend a successful representation toward the existing
+  2,048-block experiment, better reducers/transitions, and per-dimension quality.
+- **Production claim boundary:** never promise arbitrary or “infinite” render distance.
 
 ## Context and constraints
 
-- VibeCraft wants far chunks and no fixed world height. It also wants caves, Nether-like enclosed terrain, structures, player edits, modded blocks, lighting, transparent materials, and multiplayer.
-- A heightmap is compact for an Overworld surface but cannot generally represent stacked caves, bridges, floating islands, interiors, or an unbounded vertical world.
+- VibeCraft wants far chunks across a tall sparse 3D world whose initial build range is
+  approximately 10,000 blocks. It also wants caves, Nether-like enclosed terrain,
+  structures, player edits, modded blocks, lighting, transparent materials, and
+  multiplayer.
+- A heightmap is compact for an Overworld surface but cannot generally represent stacked caves, bridges, floating islands, interiors, or VibeCraft's tall sparse 3D build range.
 - Far terrain is derived visual data. It must never become authoritative for collision, block selection, simulation, saves, or anti-cheat.
 - Multiplayer clients cannot reconstruct the true far world from a seed: saved edits, generated structures, generator version, plugins, and undisclosed terrain all diverge. The server must decide what far data exists and may be sent.
 - Every extra LoD multiplies storage, invalidation, streaming, meshing, GPU residency, and transition states. “LoD saves triangles” is only one term in the cost.
@@ -39,10 +55,10 @@ This is a staged decision:
 
 | Option | Strengths | Costs/risks | Fit for VibeCraft |
 | --- | --- | --- | --- |
-| Full-detail sections + fog | Correct, one world representation, fastest route to playable | Finite view distance; section/draw count grows quadratically/cubically | **Recommended for v1** |
+| Full-detail sections + fog | Correct, one world representation, fastest route to playable | Finite view distance; section/draw count grows quadratically/cubically | **Required first-playable fallback** |
 | Godot automatic per-mesh decimation | Built in; useful for imported props | Does not reduce section count/data; procedural block faces/material boundaries may collapse badly | Reject for terrain LoD |
 | 2.5D heightfield/column spans | Compact and fast for distant surface landscapes | Weak for caves, overhangs, floating terrain, enclosed dimensions and vertical builds | Reject as universal format; possible optional Overworld backend later |
-| Sparse 3D voxel mip pyramid | Represents any 3D occupancy; blocky style; edits can propagate up levels | Memory/cache/network cost; representative-material loss; hard transitions | **Recommended post-v1 prototype** |
+| Sparse 3D voxel mip pyramid | Represents any 3D occupancy; blocky style; edits can propagate up levels | Memory/cache/network cost; representative-material loss; hard transitions | **Leading v1 prototype candidate** |
 | Independently generated coarse chunks | No need to store/downsample exact chunks | Generator divergence, seams, structures/edits mismatch, duplicate server work | Reject as default authoritative path |
 | Smooth SDF octree + Transvoxel | Mature seamless LoD for smooth volumetric terrain | Changes block silhouette and material semantics; conversion is lossy | Reject for base block terrain |
 | Impostor panoramas/terrain cards | Very low geometry for a fixed view | View-dependent updates, parallax/occlusion errors, hard edits and multiplayer caching | Defer to skybox/special vista use |
@@ -98,7 +114,7 @@ This is direct evidence that smooth-voxel transition technology is real, and equ
 
 ## Proposed design
 
-### 1. Stage 0: v1 finite renderer
+### 1. Stage 0: first-playable finite renderer
 
 - Use `RENDER-01/02` full-detail section meshes to a configurable measured radius. Initial product tuning should test 12, 16, and 20 horizontal chunk radii; do not hard-code an “extreme” number into architecture.
 - Use `RENDER-07` fog to hide the streaming frontier. Missing data is fog, never a client-generated guess.
@@ -125,9 +141,18 @@ public readonly record struct FarTileCoord(long X, long Y, long Z);
 derive a checked, render-origin-relative `Vector3I` only for a resident local window;
 that temporary value is never a world key, hash input, or persisted/network identity.
 
-- Do not build the LoD cache, network messages, hierarchy selector, or transition shader for v1. The interface/key are the migration seam, not a speculative implementation.
+- Do not build the LoD cache, network messages, hierarchy selector, or transition
+  shader before the end-to-end vertical slice passes. The interface/key are the
+  migration seam. Far-terrain implementation begins as a bounded v1 release follow-up.
 
-### 2. Post-v1 far data model
+### 2. Leading v1 far-data candidate
+
+The design below is the universal 3D candidate to prototype, not a mandate to ship
+all of its 2,048-block quality targets in v1. The first v1 profile may use fewer levels,
+a shorter fog-hidden horizon, no shadows, opaque/cutout/emissive summaries only, and
+simple overlap/skirts. A cheaper per-dimension column-span candidate may win for the
+initial Overworld-like dimension if it preserves the documented replacement seam and
+does not become the universal world/save contract.
 
 Each LoD level `L` contains sparse cubic tiles of 16³ logical cells. One cell spans `(2^L)³` world blocks; therefore one tile spans `16 × 2^L` blocks on each axis. Empty tiles are absent.
 
@@ -234,13 +259,28 @@ Terasology's documented overlapping LoD chunks support overlap as a useful first
 
 ## Greenlight criteria
 
-### V1 finite renderer
+### First-playable finite renderer
 
-- The v1 renderer holds 60 Hz on agreed reference hardware at the selected ordinary render radius with `RENDER-01/02` budgets and no far system enabled.
+- The first-playable renderer holds 60 Hz on agreed reference hardware at the selected ordinary render radius with `RENDER-01/02` budgets and no far system enabled.
 - Fog/stream-frontier transitions do not reveal persistent holes during normal movement and teleport recovery.
-- `TerrainTileKey` and source abstraction add no measurable hot-loop cost and do not force LoD cache/network code into v1.
+- `TerrainTileKey` and source abstraction add no measurable hot-loop cost and do not
+  force LoD cache/network code into the first-playable core.
 
-### Post-v1 far renderer
+### Minimal v1 far renderer
+
+- A coarse authorized terrain silhouette is visible beyond the full-detail radius in
+  the Overworld-like v1 dimension and terminates naturally in fog; it need not expose
+  caves, interiors, transparent detail, shadows, or near-field materials.
+- Missing/late/corrupt/over-budget far data falls back to fog without blocking near
+  terrain, interaction, or joining.
+- CPU, GPU, memory, disk-cache, and per-client network use have hard caps and plateau
+  under a one-hour movement/edit soak; far work is shed before near gameplay work.
+- Edits never make an older far revision reappear, and no far representation is used
+  for collision, selection, generation authority, spawning, or saves.
+- The selected v1 horizon and quality are recorded with the target hardware and fog
+  profile rather than becoming an unbounded render-distance promise.
+
+### Extended post-v1 far renderer
 
 - At a 2,048-block radius and 1080p on the agreed reference desktop, far terrain adds **≤3.0 ms GPU p95**, **≤1.0 ms client CPU p95 in steady movement**, and **≤3.0 ms client CPU p99 during ring changes**, measured separately from near terrain.
 - Resident far CPU cache is **≤256 MiB** and far GPU mesh storage is **≤256 MiB** at the target radius/quality; managed memory remains bounded after one hour of continuous exploration.
@@ -253,7 +293,7 @@ Terasology's documented overlapping LoD chunks support overlap as a useful first
 
 ## Prototype or benchmark
 
-Required: yes, before any production far implementation
+Required: yes, after the first-playable loop and before v1 far terrain ships
 
 Smallest useful experiment:
 
@@ -265,7 +305,12 @@ Smallest useful experiment:
 6. Edit blocks continuously at LoD boundaries and assert revision monotonicity from child summaries through parents, meshes, and committed residents.
 7. Soak for one hour while circling through already visited and new regions. The resident/queued/cache memory graph must plateau.
 
-Success metrics: all post-v1 criteria above. If 3D mip memory/bandwidth fails but Overworld visuals pass, investigate a per-dimension column-span backend rather than weakening Nether/cave correctness globally. If seam quality fails, retain v1 fog and defer far rendering.
+Success metrics: the minimal v1 criteria are mandatory. The 2,048-block numbers are
+extended-profile targets. If 3D mip memory/bandwidth fails but Overworld visuals pass,
+investigate a per-dimension column-span backend rather than weakening future
+Nether/cave correctness globally. If every candidate fails the bounded v1 profile,
+record the failed release requirement and fall back visibly to fog while revising the
+scope; do not disguise near terrain as far LoD.
 
 ## Risks and open questions
 
@@ -289,9 +334,10 @@ Success metrics: all post-v1 criteria above. If 3D mip memory/bandwidth fails bu
 
 ## Rejected or deferred alternatives
 
-- **Implement far LoD before the first playable loop:** rejected; it is cross-system work with no gameplay necessity and several documented failure modes.
+- **Implement far LoD before the first playable loop:** rejected; the vertical slice
+  remains the prerequisite. Minimal far terrain is a v1 release requirement after it.
 - **Use Godot automatic mesh LoD as the terrain system:** rejected; it simplifies an existing mesh but does not solve world-resolution data, tile count, streaming, edits, or materials.
-- **Universal heightmap:** rejected because it contradicts caves, unbounded vertical sections, floating terrain, and enclosed dimensions.
+- **Universal heightmap:** rejected because it contradicts caves, tall sparse vertical sections, floating terrain, and enclosed dimensions.
 - **Generate coarse terrain independently from the seed on clients:** rejected by default because it diverges from edits/plugins/generator versions and can reveal unauthorized terrain.
 - **Store far data in canonical chunk saves:** rejected; derived data must be discardable after format/reducer changes.
 - **Transvoxel for exact block terrain:** rejected; it solves smooth isosurface transitions and changes the desired silhouette.

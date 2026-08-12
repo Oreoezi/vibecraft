@@ -367,7 +367,8 @@ Success metrics:
 - The cross-platform prototype meets every lifecycle and fault-injection metric above.
 - `WORLD-04` defines what “durable checkpoint” means and demonstrates recovery after forced termination.
 - `WORLD-05` defines dirty tracking/autosave and the set of state covered by a save barrier.
-- `NET-03` proves a loopback candidate and protocol conformance; rejecting GNS must not force different gameplay semantics.
+- `NET-03` validates the selected GNS loopback path and protocol conformance; any
+  measured showstopper and replacement must not force different gameplay semantics.
 - `NET-07` defines build/protocol compatibility before admission.
 - `ARCH-05` gives server plugins bounded shutdown behavior.
 - Packaging proves the selected host adapter and runtime are included and launchable in exported Godot builds on every declared target platform.

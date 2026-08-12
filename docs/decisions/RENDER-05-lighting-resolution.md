@@ -14,6 +14,13 @@ One-sentence rationale: A 64³ field makes a single 16³ section consume 2 GiB f
 
 The 64³ interpretation is rejected. The shader-page path remains conditional on the prototype; vertex-baked block light from `RENDER-04` is the defined fallback.
 
+### Owner decision — 2026-08-13
+
+Keep gameplay light Minecraft-simple: server rules consume two block-scale 0–15
+values (sky and block light). Client rendering may interpolate those values and shade
+every visible fragment with smooth material/normal/shadow effects. Smooth appearance
+does not imply denser authoritative light samples or alter spawning rules.
+
 ## Resolve the specification ambiguity
 
 The current wording combines three unrelated resolutions:

@@ -1,6 +1,13 @@
 # Decision briefs
 
-All 40 planned topics are researched. Each brief remains `Proposed` until the owner greenlights its contract, experiment, deferral, or rejection. Start with [`../READ_ME_FIRST.md`](../READ_ME_FIRST.md), the owner-reviewed [`../OWNER_DECISIONS.md`](../OWNER_DECISIONS.md), the [`../research/GREENLIGHT-CHECKLIST.md`](../research/GREENLIGHT-CHECKLIST.md), and the acyclic [`../research/DEPENDENCY-MAP.md`](../research/DEPENDENCY-MAP.md); do not implement these files in numeric order or treat every `Requires` edge as a hard prerequisite.
+All 40 planned topics are researched. A brief may retain `Status: Proposed` while its
+owner direction is accepted but its measured implementation gate remains unrun;
+[`../OWNER_DECISIONS.md`](../OWNER_DECISIONS.md) is authoritative for that distinction.
+Start with [`../READ_ME_FIRST.md`](../READ_ME_FIRST.md), the owner record, the
+[`../research/GREENLIGHT-CHECKLIST.md`](../research/GREENLIGHT-CHECKLIST.md), and the
+acyclic [`../research/DEPENDENCY-MAP.md`](../research/DEPENDENCY-MAP.md); do not
+implement these files in numeric order or treat every `Requires` edge as a hard
+prerequisite.
 
 [`FOUNDATION-00`](FOUNDATION-00-spec-risk-audit.md) is the cross-cutting risk audit rather than one of the 40 topic IDs.
 
@@ -16,11 +23,11 @@ All 40 planned topics are researched. Each brief remains `Proposed` until the ow
 
 - [`NET-01`](NET-01-network-simulation-model.md) — authoritative network simulation
 - [`NET-02`](NET-02-movement-prediction-reconciliation.md) — movement prediction and reconciliation
-- [`NET-03`](NET-03-transport-and-reliability.md) — transport and reliability
-- [`NET-04`](NET-04-block-interaction-lag-compensation.md) — block interaction and lag compensation
-- [`NET-05`](NET-05-interest-management.md) — interest management and prioritization
-- [`NET-06`](NET-06-tick-and-simulation-rates.md) — world and packet cadence
-- [`NET-07`](NET-07-protocol-versioning.md) — protocol versioning/capabilities
+- [`NET-03`](NET-03-transport-and-reliability.md) — selected GNS transport and reliability boundary
+- [`NET-04`](NET-04-block-interaction-lag-compensation.md) — current-time v1 actions; future subtick seam
+- [`NET-05`](NET-05-interest-management.md) — interest management proposal awaiting owner discussion
+- [`NET-06`](NET-06-tick-and-simulation-rates.md) — fixed 60 TPS world and independent packet cadence
+- [`NET-07`](NET-07-protocol-versioning.md) — protocol versioning/capabilities and future transfer seam
 - [`NET-08`](NET-08-server-abuse-and-ddos-boundary.md) — abuse and DDoS boundary
 - [`NET-09`](NET-09-client-content-agreement.md) — client content agreement
 
@@ -39,10 +46,10 @@ All 40 planned topics are researched. Each brief remains `Proposed` until the ow
 ## Rendering and lighting
 
 - [`RENDER-01`](RENDER-01-chunk-meshing.md) — chunk meshing
-- [`RENDER-02`](RENDER-02-mesh-job-pipeline.md) — mesh rebuild/upload pipeline
-- [`RENDER-03`](RENDER-03-far-terrain-lod.md) — far-terrain LoD
+- [`RENDER-02`](RENDER-02-mesh-job-pipeline.md) — mesh rebuild/upload proposal awaiting owner discussion
+- [`RENDER-03`](RENDER-03-far-terrain-lod.md) — minimal v1 far terrain, extended LoD later
 - [`RENDER-04`](RENDER-04-lighting-model.md) — lighting model
-- [`RENDER-05`](RENDER-05-lighting-resolution.md) — lighting resolution
+- [`RENDER-05`](RENDER-05-lighting-resolution.md) — block-scale 0–15 gameplay light and smooth client shading
 - [`RENDER-06`](RENDER-06-material-model.md) — material/batching model
 - [`RENDER-07`](RENDER-07-fog-and-atmosphere.md) — fog and atmosphere
 
@@ -62,7 +69,7 @@ All 40 planned topics are researched. Each brief remains `Proposed` until the ow
 
 ## Gameplay systems
 
-- [`GAME-01`](GAME-01-content-registries.md) — block/item/entity registries
+- [`GAME-01`](GAME-01-content-registries.md) — typed uint32 registries and strict required-content world lock
 - [`GAME-02`](GAME-02-redstone-and-block-updates.md) — redstone and block-update substrate
 
 ## Status vocabulary

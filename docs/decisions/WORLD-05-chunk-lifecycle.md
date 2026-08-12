@@ -264,7 +264,7 @@ Success metrics:
 
 - Run the greenlight criteria at hard budgets of 256 MiB, 512 MiB, and 1 GiB and at 1/2/4 materialization workers.
 - Measure actual charged bytes versus process working-set and managed-heap deltas for at least 10,000 homogeneous and palette-diverse chunks; ledger undercount must be zero for owned buffers and total estimate error must stay conservative within 20% after calibration.
-- Record p50/p95/p99 activation, save, and eviction latency; lifecycle bookkeeping plus completion commit must consume less than 2 ms p99 of a 50 ms simulation tick under the target resident count.
+- Record p50/p95/p99 activation, save, and eviction latency; lifecycle bookkeeping plus completion commit must consume less than 2 ms p99 of the 16.67 ms fixed 60 TPS step under the target resident count.
 - Randomize asynchronous completion and acknowledgement order in 100 seeded runs; final resident keys, revisions, persistent hashes, and lease counts must be identical.
 - Kill the process after every simulated storage step and verify recovery against the acknowledged revision log.
 
@@ -272,7 +272,7 @@ Failure rule: If the ledger exceeds its hard bound, a stale save clears a newer 
 
 ## Risks and open questions
 
-- `WORLD-01` is a hard blocker: an unbounded-height column cannot be a finite resident/allocation unit. Vertical section grouping affects keys, entity ownership, cross-section ticks, save records, and budget granularity.
+- `WORLD-01` is a hard blocker: even the initial approximately 10,000-block build range cannot be one resident/allocation unit. Vertical section grouping affects keys, entity ownership, cross-section ticks, save records, and budget granularity.
 - Logical accounting is easiest for owned arrays and pools but approximate for object graphs, runtime overhead, plugins, and native allocations. The ledger must intentionally overcharge calibrated per-entry overhead and compare itself with process/GC telemetry.
 - A pinned working set can legitimately exceed an administrator's configured limit. The system can reject new demand and expose owners, but it cannot preserve simulation radius, progress, and a hard cap simultaneously.
 - Snapshot copies can double memory during save. `WORLD-03` should test immutable/page-owned or copy-on-write section representations, but v1 should prefer a bounded copy whose cost is charged over unsafe concurrent serialization.

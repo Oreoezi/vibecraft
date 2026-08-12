@@ -11,6 +11,7 @@ Answers: `WORLD-01`, `ARCH-02`, `GAME-01`, part of `WORLD-09`.
 Build a normal .NET test/benchmark project with no Godot dependency:
 
 - signed block/section coordinates and negative floor division;
+- explicit dimension min/max build Y values spanning the initial 10,000-block policy;
 - 16³ and 32³ candidate section containers;
 - `Uniform | Paletted | Direct` block states;
 - sparse block entities and generational dynamic-entity handles;
@@ -22,7 +23,8 @@ Decision outputs:
 - freeze v1 section side before any real world is created;
 - choose mutable/persisted palette representations;
 - establish stable identifiers versus runtime compact IDs;
-- prove stale handles and unknown content are fail-safe.
+- prove stale handles are fail-safe and missing required gameplay content produces an
+  exact zero-write world-open refusal.
 
 Minimum pass conditions:
 
@@ -46,7 +48,8 @@ Test:
 - verified backup/snapshot publication;
 - lazy record migration and explicit copy migration;
 - future-major read refusal with zero writes;
-- missing mod-owned opaque records.
+- missing required mod/content lock refusal plus read-only recovery/export of bounded
+  opaque records.
 
 Minimum pass conditions:
 
@@ -60,7 +63,12 @@ Minimum pass conditions:
 
 Answers: `ARCH-01`, `ARCH-04`, `NET-01`, `NET-02`, `NET-03`, `NET-04`, `NET-06`, `NET-07`, `NET-08`.
 
-Build one shared voxel movement kernel, host-agnostic `ServerCore`, Godot client, observer/bot client, supervised child-loopback host, embedded conformance/fallback adapter, and deterministic network impairment proxy. Use a tiny editable world; do not add broad content. Start with one 20 Hz `WorldTick`; GNS remains a transport candidate, while the child host is the selected Windows/Linux desktop direction.
+Build one shared 60 TPS voxel movement kernel, host-agnostic `ServerCore`, Godot
+client, observer/bot client, supervised child-loopback host, embedded
+conformance/fallback adapter, selected GNS transport adapter, and deterministic network
+impairment proxy. Use a tiny editable world; do not add broad content. GNS and the child
+host are owner-selected directions whose packaging/trust/lifecycle acceptance remains
+part of this prototype.
 
 Required behaviors:
 
@@ -71,7 +79,8 @@ Required behaviors:
 - connection/version/capability handshake;
 - reliable and superseding message classes;
 - pause, save barrier, graceful shutdown, forced kill, orphan prevention;
-- malformed/replayed/flooded packet harness.
+- malformed/replayed/flooded packet harness plus one authenticated-session abuse
+  harness that attributes and bounds packet/action/chunk/update work.
 
 Network matrix:
 
@@ -84,10 +93,11 @@ Network matrix:
 
 Decision outputs:
 
-- transport/library choice plus authenticated server/channel-binding and admission facts;
-- whether 20 Hz prediction passes; only a failure unlocks an exactly nested 40 Hz controller branch;
+- GNS acceptance plus authenticated server/channel-binding and admission facts;
+- whether fixed 60 TPS prediction/replay and the declared workload pass with headroom;
 - movement correction thresholds/smoothing;
-- current-time block policy; combat rewind and support grace remain independent disabled experiments;
+- receive-time/current-state block and combat policy; historical/subtick validation and
+  support grace remain disabled later capabilities;
 - child-loopback lifecycle acceptance and embedded-adapter protocol/authority conformance;
 - exact overload and resync behavior.
 
@@ -96,6 +106,8 @@ Minimum pass conditions:
 - immediate local presentation and eventual authoritative convergence;
 - no client packet directly assigns durable position, inventory, health, or world state;
 - no unbounded queue, history, retransmission, or log growth;
+- one authenticated attacker is throttled/disconnected without crashing or materially
+  stalling healthy sessions in the declared fixture;
 - unsupported/malformed protocol fails before world allocation;
 - forced local-server failure never falsely reports a successful save;
 - measured p99 tick and bandwidth budgets on declared target hardware/workload.
@@ -186,7 +198,8 @@ Minimum pass conditions:
 - sandbox starts with no ambient authority and receives only declared host capabilities;
 - all world mutation returns through validated owner-scheduled commands;
 - extension failure cannot leave a half-committed tick transaction;
-- missing extension data is preserved or explicitly quarantined;
+- a missing required extension blocks normal world open with zero writes; explicit
+  recovery/export preserves or quarantines its bounded data;
 - host storage/entity refactor does not change ABI fixtures.
 
 Do not declare ABI 1.0 until at least two first-party features have been maintained through an internal refactor.
@@ -206,13 +219,19 @@ Minimum pass conditions:
 - work is budgeted without losing durable scheduled updates;
 - a pathological circuit cannot stall unrelated world simulation indefinitely.
 
-## P7 — Advanced visuals, post-v1 unless release scope changes
+## P7 — Minimal far terrain for v1, then advanced visuals
 
 Answers: `RENDER-03` through `RENDER-07`.
 
-Prototype lighting, materials, fog, and far terrain in isolated repeatable scenes using GPU captures and target-hardware matrices. Compare screenshots blindly where visual quality is subjective. Keep fallbacks and quality tiers explicit.
+After P0–P4 and the G5 vertical slice are healthy, prototype the minimal v1 far-terrain
+profile in isolated repeatable scenes using GPU captures and target-hardware matrices.
+Compare a shallow sparse 3D mip candidate with one cheaper per-dimension representation.
+Use heavy fog, cheap material summaries, strict resource caps, and fog fallback. Compare
+screenshots blindly where visual quality is subjective.
 
-This prototype must not delay P0–P4. Far LoD, reflection/refraction, and procedural materials are later features until the full-detail renderer, world streaming, and base pack format are stable.
+This prototype must not delay P0–P4 or G5. A bounded coarse silhouette is required
+before v1; a 2,048-block horizon, better transitions/materials, reflection/refraction,
+volumetrics, and procedural materials remain later quality features.
 
 ## Execution rule
 

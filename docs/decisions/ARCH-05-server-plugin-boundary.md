@@ -37,12 +37,14 @@ Server “plugin support out of the box” therefore means:
 ## Context and constraints
 
 - `ARCH-01` makes the server authoritative. A server plugin is inside that authority boundary and can affect durable worlds, inventories, gameplay, and connected users.
-- `WORLD-08` selects one deterministic 20 Hz writer per world for v1 and permits pure/background work only through immutable inputs and ordered publication.
+- `WORLD-08` selects one deterministic 60 TPS writer per world for v1 and permits pure/background work only through immutable inputs and ordered publication.
 - `ARCH-02` keeps blocks compact, block entities sparse, and dynamic entities in replaceable stores. A plugin API must not expose those layouts.
 - `WORLD-09` requires namespaced versioned persistence, bounded opaque preservation, and explicit migrations.
 - A malicious or buggy sandbox module may attempt escape, denial of service, invalid mutations, stale handles, persistence abuse, event recursion, information disclosure, or nondeterministic ordering.
 - A private native fork may do all of those plus P/Invoke, reflection, arbitrary I/O, thread creation, process termination, and memory corruption through native code. The server cannot securely contain it in-process, so it has no public-plugin compatibility contract.
-- Plugin callbacks cannot be allowed to turn a 50 ms world tick into an unbounded deadline. Count/fuel limits preserve deterministic work decisions; wall-time watchdogs detect runaway execution.
+- Plugin callbacks cannot be allowed to consume an unbounded portion of the 16.67 ms
+  world-step cadence. Count/fuel limits preserve deterministic work decisions;
+  wall-time watchdogs detect runaway execution.
 - Future regionized simulation is possible but not greenlit. The API should express owner context without claiming that v1 is parallel.
 
 ## Options considered
@@ -229,9 +231,21 @@ These defaults are policy/configuration starting points, not stable ABI constant
 | Per-player plugin storage | 64 KiB/player/module, 64 MiB aggregate default | Sparse and paginated; configurable with operator approval |
 | Logs | 64 KiB/minute, 16 KiB burst | Sanitized and suppression-attributed |
 
-Fuel is deterministic and charged to Wasm instructions plus host work. Calibrate it on the declared baseline server so an ordinary callback budget is **0.5 ms p95** and an explicitly classified bulk callback budget is **2 ms p95**. A module may consume at most the calibrated equivalent of **2 ms per 20 Hz world tick**, and all sandboxed modules together target **5 ms p95**. Deferrable observer work is postponed when the aggregate budget is empty; authoritative policy work fails closed according to its event contract.
+Fuel is deterministic and charged to sandbox instructions plus host work. Calibrate it
+on the declared baseline server so ordinary callbacks are sub-millisecond and all
+sandboxed modules together initially target **2 ms p95 per 60 TPS world step**. No
+single module receives an automatic per-step entitlement; quotas are apportioned by
+role and measured host-call cost. Deferrable observer work is postponed when the
+aggregate budget is empty; authoritative policy work fails closed according to its
+event contract. Freeze exact fuel/time numbers only after the runtime and server
+fixture exist.
 
-Each invocation also gets a **5 ms epoch wall-clock trap deadline**. The wall clock is a runaway backstop, not authoritative scheduling and not an excuse for blocking host calls. Host functions must complete in bounded memory/time without disk/network waits. If server tick p99 cannot stay below 50 ms with these budgets, reduce plugin quotas/event frequency or move optional work; do not make authoritative processing stopwatch-dependent.
+Each invocation also gets a short measured epoch wall-clock trap deadline. The wall
+clock is a runaway backstop, not authoritative scheduling and not an excuse for
+blocking host calls. Host functions must complete in bounded memory/time without
+disk/network waits. If server-step p99 cannot remain below the 16.67 ms cadence with
+headroom, reduce plugin quotas/event frequency or move optional work; do not make
+authoritative processing stopwatch-dependent.
 
 Trusted native plugin time, allocations, events, and commands are measured and attributed but not securely capped. .NET has no safe general way to abort arbitrary managed code at a deadline. A native callback that hangs may require the process watchdog to terminate the server and recover from the last durable save.
 
@@ -317,8 +331,12 @@ Every list/bytes/query is bounded or paginated. Every handle is opaque/generatio
 - The selected sandbox runtime passes `MOD-01`/`MOD-02` import, interruption, memory, allocation, handle, and platform gates.
 - Deterministic handler order and plugin RNG produce identical replay hashes across worker counts and randomized asynchronous completion.
 - Trap/quota/invalid-command tests commit no partial command or storage result; a required-module failure saves/stops at the last committed boundary.
-- Missing module data survives load/save byte-for-byte where `WORLD-09` permits, and migrations cannot access another namespace.
-- Representative plugin load stays within the 5 ms p95 aggregate sandbox budget and the full `WORLD-08` target remains below 50 ms p99 on the declared baseline server.
+- A missing required module causes a zero-write normal-open refusal. Explicit
+  recovery/export preserves its bounded data byte-for-byte where `WORLD-09` permits,
+  and migrations cannot access another namespace.
+- Representative plugin load stays within the frozen aggregate sandbox budget and the
+  full `WORLD-08` step remains below the 16.67 ms cadence at p99 with declared
+  headroom on the baseline server.
 - At least two first-party gameplay features use the public data/command/event/storage surface before ABI 1.0 is promised, as required by `MOD-03`.
 
 ## Prototype and test plan
@@ -365,7 +383,9 @@ Pass conditions:
 - Wasmtime .NET Component Model/resource-limit support and security-release lag are unresolved until `MOD-01`'s spike. A missing enforceable limit blocks the sandbox claim.
 - C# guest components may have larger startup/memory needs than Rust/AssemblyScript guests; the initial server SDK may need to support fewer languages.
 - A synchronous required policy hook adds latency and coupling. Keep the cancelable event catalog tiny and prefer declarative rules or prevalidated command handlers.
-- Aggregate deterministic fuel controls work but cannot guarantee a 50 ms tick on every CPU. Minimum hardware and reference calibration must be published.
+- Aggregate deterministic fuel controls work but cannot guarantee a 16.67 ms fixed
+  60 TPS step on every CPU. Minimum hardware and reference calibration must be
+  published.
 - Host-call validators become security-critical and can contain confused-deputy or TOCTOU bugs even when Wasm isolation is perfect.
 - Future HTTP/database integrations introduce nondeterminism, credentials, SSRF, and blocking. They need a broker/async result model not specified here.
 - Future region simulation will require real cross-owner queues and ownership migration. The proposed API preserves the seam but does not prove that migration.
