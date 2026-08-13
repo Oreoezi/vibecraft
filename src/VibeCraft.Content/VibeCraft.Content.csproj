@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Stable content identity and world/runtime mappings.</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../VibeCraft.Primitives/VibeCraft.Primitives.csproj" />
+  </ItemGroup>
+</Project>

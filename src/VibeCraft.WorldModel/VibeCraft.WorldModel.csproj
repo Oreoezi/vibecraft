@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Immutable world-section contracts and internal storage candidates.</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../VibeCraft.Content/VibeCraft.Content.csproj" />
+    <ProjectReference Include="../VibeCraft.Primitives/VibeCraft.Primitives.csproj" />
+  </ItemGroup>
+</Project>
