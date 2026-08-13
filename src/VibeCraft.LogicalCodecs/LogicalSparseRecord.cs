@@ -102,6 +102,13 @@ public readonly record struct LogicalSparseInput
         Payload = [.. payload.Span];
     }
 
+    private LogicalSparseInput(int localIndex, ContentKey type, ImmutableArray<byte> payload)
+    {
+        LocalIndex = localIndex;
+        Type = type;
+        Payload = payload;
+    }
+
     /// <summary>Gets the nonnegative local index supplied by the caller.</summary>
     public int LocalIndex { get; }
 
@@ -110,6 +117,20 @@ public readonly record struct LogicalSparseInput
 
     /// <summary>Gets the deep-copied opaque sparse payload.</summary>
     public ImmutableArray<byte> Payload { get; }
+
+    internal static LogicalSparseInput FromEncoded(int localIndex, ContentKey type, ReadOnlySpan<byte> payload)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(localIndex);
+        ContentKey validatedType = type.IsValid
+            ? type
+            : throw new ArgumentException("A validated canonical sparse content key is required.", nameof(type));
+
+        return payload.Length <= LogicalSparseRecord.MaxPayloadBytes
+            ? new LogicalSparseInput(localIndex, validatedType, [.. payload])
+            : throw new ArgumentOutOfRangeException(
+                nameof(payload),
+                $"A sparse payload may contain at most {LogicalSparseRecord.MaxPayloadBytes} bytes.");
+    }
 
     internal void ThrowIfInvalid()
     {
