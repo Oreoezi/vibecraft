@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Explicit deterministic logical projections, separate from storage and wire codecs.</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../VibeCraft.Content/VibeCraft.Content.csproj" />
+    <ProjectReference Include="../VibeCraft.Primitives/VibeCraft.Primitives.csproj" />
+    <ProjectReference Include="../VibeCraft.WorldModel/VibeCraft.WorldModel.csproj" />
+  </ItemGroup>
+</Project>

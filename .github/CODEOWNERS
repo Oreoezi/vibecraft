@@ -1,0 +1,14 @@
+# Keep project-control and compatibility-sensitive changes under explicit review.
+/.github/ @Oreoezi
+/VibeCraft.slnx @Oreoezi
+/global.json @Oreoezi
+/NuGet.config @Oreoezi
+/Directory.Build.* @Oreoezi
+/Directory.Packages.props @Oreoezi
+/.config/dotnet-tools.json @Oreoezi
+/**/packages.lock.json @Oreoezi
+/docs/implementation/G0/** @Oreoezi
+/docs/implementation/COMPATIBILITY_SURFACE.md @Oreoezi
+/docs/OWNER_DECISIONS.md @Oreoezi
+/docs/research/PROPOSED-REQUIREMENTS-BASELINE.md @Oreoezi
+/docs/research/DEPENDENCY-MAP.md @Oreoezi

@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Dependency-free scalar and coordinate domains for VibeCraft.</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+</Project>

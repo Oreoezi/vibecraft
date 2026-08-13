@@ -1,0 +1,16 @@
+**/bin/
+**/obj/
+artifacts/
+TestResults/
+BenchmarkDotNet.Artifacts/
+coverage/
+*.binlog
+*.user
+*.suo
+*.swp
+*.tmp
+.idea/
+.vs/
+.vscode/
+.DS_Store
+Thumbs.db

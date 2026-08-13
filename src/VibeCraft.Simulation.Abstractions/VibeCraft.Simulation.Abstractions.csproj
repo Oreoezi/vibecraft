@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Engine-neutral owner, publication, and collision-view vocabulary.</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../VibeCraft.Primitives/VibeCraft.Primitives.csproj" />
+    <ProjectReference Include="../VibeCraft.WorldModel/VibeCraft.WorldModel.csproj" />
+  </ItemGroup>
+</Project>

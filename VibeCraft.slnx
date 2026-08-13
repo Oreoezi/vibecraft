@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/VibeCraft.Content/VibeCraft.Content.csproj" />
+    <Project Path="src/VibeCraft.LogicalCodecs/VibeCraft.LogicalCodecs.csproj" />
+    <Project Path="src/VibeCraft.Primitives/VibeCraft.Primitives.csproj" />
+    <Project Path="src/VibeCraft.Simulation.Abstractions/VibeCraft.Simulation.Abstractions.csproj" />
+    <Project Path="src/VibeCraft.WorldModel/VibeCraft.WorldModel.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/VibeCraft.G1.Tests/VibeCraft.G1.Tests.csproj" />
+  </Folder>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/VibeCraft.G1.Benchmarks/VibeCraft.G1.Benchmarks.csproj" />
+  </Folder>
+</Solution>
