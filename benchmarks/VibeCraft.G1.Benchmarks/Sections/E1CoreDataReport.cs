@@ -981,8 +981,9 @@ internal static class E1CoreDataReport
             {
                 Pair(
                     ordinal, distribution, round, "section-side/snapshot", "one-side32", "eight-side16", CubeVolume,
-                    () => MeasureSnapshots(one32, SectionEqualVolumeLayout.OneSide32),
-                    () => MeasureSnapshots(eight16, SectionEqualVolumeLayout.EightSide16));
+                    () => MeasureSnapshots(one32),
+                    () => MeasureSnapshots(eight16),
+                    requireSameChecksum: false);
                 Pair(
                     ordinal, distribution, round, "section-side/logical-projection", "one-side32", "eight-side16", CubeVolume,
                     () => MeasureProjection(one32, SectionEqualVolumeLayout.OneSide32, map, ordinal),
@@ -1538,12 +1539,10 @@ internal static class E1CoreDataReport
             : new E1MeasuredOperation(duration, allocated, timingChecksum, null, null);
     }
 
-    private static E1MeasuredOperation MeasureSnapshots(
-        MutableSectionBlockStates[] sections,
-        SectionEqualVolumeLayout layout)
+    private static E1MeasuredOperation MeasureSnapshots(MutableSectionBlockStates[] sections)
     {
-        _ = SnapshotChecksum(sections, layout);
-        return Measure(() => SnapshotChecksum(sections, layout));
+        _ = SnapshotCreationChecksum(sections);
+        return Measure(() => SnapshotCreationChecksum(sections));
     }
 
     private static E1MeasuredOperation MeasureProjection(
@@ -1665,12 +1664,21 @@ internal static class E1CoreDataReport
         return checksum;
     }
 
-    private static ulong SnapshotChecksum(
-        MutableSectionBlockStates[] sections,
-        SectionEqualVolumeLayout layout)
+    private static ulong SnapshotCreationChecksum(MutableSectionBlockStates[] sections)
     {
-        WorldStateId[] semantic = CopyCanonicalFromSnapshots(sections, layout);
-        return SectionBenchmarkSupport.Checksum(semantic);
+        ulong checksum = 0xCBF29CE484222325UL;
+        foreach (MutableSectionBlockStates section in sections)
+        {
+            SectionBlockStateSnapshot snapshot = section.CaptureSnapshot();
+            SectionStorageMetrics metrics = snapshot.GetStorageMetrics();
+            checksum = unchecked((checksum ^ checked((ulong)snapshot.Geometry.Side.Value)) * 0x100000001B3UL);
+            checksum = unchecked((checksum ^ checked((ulong)snapshot.Revision.Value)) * 0x100000001B3UL);
+            checksum = unchecked((checksum ^ checked((ulong)snapshot.Count)) * 0x100000001B3UL);
+            checksum = unchecked((checksum ^ (ulong)snapshot.StorageKind) * 0x100000001B3UL);
+            checksum = unchecked((checksum ^ checked((ulong)metrics.KnownPayloadBytes)) * 0x100000001B3UL);
+        }
+
+        return checksum;
     }
 
     private static ulong ApplyEdits(MutableSectionBlockStates[] sections, SectionEqualVolumeLayout layout, SectionEdit[] trace)
@@ -1935,6 +1943,7 @@ internal static class E1CoreDataReport
         [
             new E1MetricDefinition("adaptive-vs-dense/*", "lower is better: adaptive Stopwatch ticks divided by dense Stopwatch ticks, paired on the same cube and alternating order"),
             new E1MetricDefinition("section-side/*", "lower is better: one-side32 Stopwatch ticks divided by eight-side16 Stopwatch ticks, paired on the same cube and alternating order"),
+            new E1MetricDefinition("section-side/snapshot", "snapshot creation only: capture one immutable snapshot per candidate section and consume O(1) snapshot metadata inside the timed interval; equal-volume semantic reconstruction is verified outside the timed interval"),
             new E1MetricDefinition("known-payload-bytes", "diagnostic owned adaptive scalar/array payload bytes; not retained process memory and not storage/save/network/wire bytes"),
             new E1MetricDefinition("logical-projection-bytes", "exact #8 canonical logical-projection fixture bytes; not save/network/wire bytes"),
             new E1MetricDefinition("unique/gross-halo-samples", "per 4x4x4 edit window; remesh input samples, not rendered mesh time"),

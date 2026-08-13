@@ -83,6 +83,10 @@ jobs:
           if ($report.corpusFingerprints.oneSide32 -ne '49693095424177a59ff75c79d3f08d5ff06056670e8441ed8d330cf198ea78b2' -or $report.corpusFingerprints.eightSide16 -ne 'd4e4ad87aafa6ccf3786544f44a0533570694eabd50bd4639cb3c7a427da4140') {
             throw 'The E1 smoke corpus fingerprint changed.'
           }
+          $snapshotDefinition = @($report.metricDefinitions | Where-Object { $_.name -eq 'section-side/snapshot' })
+          if ($snapshotDefinition.Count -ne 1 -or $snapshotDefinition[0].definition -notlike 'snapshot creation only:*outside the timed interval') {
+            throw 'The E1 snapshot metric is not explicitly isolated from semantic reconstruction.'
+          }
           foreach ($criterionName in @('semantic-and-projection-correctness', 'zero-allocation-warmed-reads', 'positive-measured-durations')) {
             $criterion = @($report.provisionalAssessment.criteria | Where-Object { $_.name -eq $criterionName })
             if ($criterion.Count -ne 1 -or $criterion[0].status -ne 'pass') {

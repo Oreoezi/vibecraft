@@ -136,6 +136,29 @@ public sealed class E1CoreDataReportTests
         }
     }
 
+    [Fact]
+    public void SnapshotCreationComparisonConsumesPerSnapshotMetadataWhileSemanticChecksRemainSeparate()
+    {
+        WorldStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(SectionFixtureKind.Mixed, Seed);
+        MutableSectionBlockStates[] oneSide32 = SectionEqualVolumeFixture.CreateSections(SectionEqualVolumeLayout.OneSide32, canonical);
+        MutableSectionBlockStates[] eightSide16 = SectionEqualVolumeFixture.CreateSections(SectionEqualVolumeLayout.EightSide16, canonical);
+
+        (int Side, long Revision, int Count, SectionBlockStorageKind Kind, long KnownPayloadBytes)[] oneMetadata =
+            CaptureSnapshotMetadata(oneSide32);
+        (int Side, long Revision, int Count, SectionBlockStorageKind Kind, long KnownPayloadBytes)[] eightMetadata =
+            CaptureSnapshotMetadata(eightSide16);
+
+        _ = Assert.Single(oneMetadata);
+        Assert.Equal(8, eightMetadata.Length);
+        Assert.Equal(32, oneMetadata[0].Side);
+        Assert.All(eightMetadata, metadata => Assert.Equal(16, metadata.Side));
+        Assert.Equal(SectionEqualVolumeFixture.CubeVolume, oneMetadata.Sum(metadata => metadata.Count));
+        Assert.Equal(SectionEqualVolumeFixture.CubeVolume, eightMetadata.Sum(metadata => metadata.Count));
+        Assert.NotEqual(oneMetadata, eightMetadata);
+        Assert.Equal(canonical, CopyLayout(oneSide32, SectionEqualVolumeLayout.OneSide32));
+        Assert.Equal(canonical, CopyLayout(eightSide16, SectionEqualVolumeLayout.EightSide16));
+    }
+
     [Theory]
     [InlineData(0, "f46ed79a49c04dfad1468a281639350f8b5a2c57f0c36cb9170490d46ecaffa9")]
     [InlineData(1, "d7951bab8dfc5ce8f21a7036068ec22c2d68ac7cb08200ee300549819d50da28")]
@@ -249,6 +272,24 @@ public sealed class E1CoreDataReportTests
             _ => SectionFixtureKind.HighEntropy,
         };
         return (kind, unchecked(Seed + ((ulong)ordinal * CubeSeedIncrement)));
+    }
+
+    private static (int Side, long Revision, int Count, SectionBlockStorageKind Kind, long KnownPayloadBytes)[] CaptureSnapshotMetadata(
+        MutableSectionBlockStates[] sections)
+    {
+        return
+        [
+            .. sections.Select(section =>
+            {
+                SectionBlockStateSnapshot snapshot = section.CaptureSnapshot();
+                return (
+                    snapshot.Geometry.Side.Value,
+                    snapshot.Revision.Value,
+                    snapshot.Count,
+                    snapshot.StorageKind,
+                    snapshot.GetStorageMetrics().KnownPayloadBytes);
+            }),
+        ];
     }
 
     private static WorldStateId[] CopyLayout(MutableSectionBlockStates[] sections, SectionEqualVolumeLayout layout)
