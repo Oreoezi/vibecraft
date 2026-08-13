@@ -8,7 +8,7 @@ namespace VibeCraft.G1.Tests.LogicalCodecs;
 public sealed class LogicalCodecResultTests
 {
     [Fact]
-    public void FailureAndResultTypesHaveNoPublicConstructionOrUsefulDefault()
+    public void FailureAndResultTypesHaveNoPublicOrNonPrivateConstructionOrUsefulDefault()
     {
         Type[] types =
         [
@@ -23,6 +23,9 @@ public sealed class LogicalCodecResultTests
             Assert.True(type.IsSealed);
             Assert.False(type.IsValueType);
             Assert.Empty(type.GetConstructors(BindingFlags.Instance | BindingFlags.Public));
+            Assert.All(
+                type.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic),
+                constructor => Assert.True(constructor.IsPrivate));
             _ = Assert.Throws<MissingMethodException>(() => Activator.CreateInstance(type));
         }
 
@@ -38,9 +41,59 @@ public sealed class LogicalCodecResultTests
     }
 
     [Fact]
+    public void FailureCodesAndFieldsRetainLegacyValuesAndCoverProjectionFailures()
+    {
+        Assert.Equal(1, (byte)LogicalCodecFailureCode.IncorrectLength);
+        Assert.Equal(2, (byte)LogicalCodecFailureCode.UnknownRecordKind);
+        Assert.Equal(3, (byte)LogicalCodecFailureCode.InvalidHeader);
+        Assert.Equal(4, (byte)LogicalCodecFailureCode.UnsupportedVersion);
+        Assert.Equal(5, (byte)LogicalCodecFailureCode.LimitExceeded);
+        Assert.Equal(6, (byte)LogicalCodecFailureCode.ArithmeticOverflow);
+        Assert.Equal(7, (byte)LogicalCodecFailureCode.InvalidEnum);
+        Assert.Equal(8, (byte)LogicalCodecFailureCode.InvalidText);
+        Assert.Equal(9, (byte)LogicalCodecFailureCode.DuplicateIdentity);
+        Assert.Equal(10, (byte)LogicalCodecFailureCode.NonCanonicalOrder);
+        Assert.Equal(11, (byte)LogicalCodecFailureCode.NonCanonicalPalette);
+        Assert.Equal(12, (byte)LogicalCodecFailureCode.IndexOutOfRange);
+        Assert.Equal(13, (byte)LogicalCodecFailureCode.UnmappedWorldState);
+        Assert.Equal(14, (byte)LogicalCodecFailureCode.TrailingData);
+        Assert.Equal(15, (byte)LogicalCodecFailureCode.InvalidValue);
+
+        Assert.Equal(7, (byte)LogicalCodecField.Projection);
+        Assert.Equal(8, (byte)LogicalCodecField.Header);
+        Assert.Equal(9, (byte)LogicalCodecField.Version);
+        Assert.Equal(10, (byte)LogicalCodecField.Mapping);
+        Assert.Equal(11, (byte)LogicalCodecField.ContentKey);
+        Assert.Equal(12, (byte)LogicalCodecField.Property);
+        Assert.Equal(13, (byte)LogicalCodecField.Record);
+        Assert.Equal(14, (byte)LogicalCodecField.Side);
+        Assert.Equal(15, (byte)LogicalCodecField.Palette);
+        Assert.Equal(16, (byte)LogicalCodecField.Voxel);
+        Assert.Equal(17, (byte)LogicalCodecField.Sparse);
+        Assert.Equal(18, (byte)LogicalCodecField.Payload);
+        Assert.Equal(19, (byte)LogicalCodecField.Schedule);
+        Assert.Equal(20, (byte)LogicalCodecField.Queue);
+        Assert.Equal(21, (byte)LogicalCodecField.DueTick);
+        Assert.Equal(22, (byte)LogicalCodecField.Priority);
+        Assert.Equal(23, (byte)LogicalCodecField.Sequence);
+        Assert.Equal(24, (byte)LogicalCodecField.LocalIndex);
+        Assert.Equal(25, (byte)LogicalCodecField.ExpectedType);
+        Assert.Equal(26, (byte)LogicalCodecField.Digest);
+
+        AssertEnumValuesAreUnique<LogicalCodecFailureCode>();
+        AssertEnumValuesAreUnique<LogicalCodecField>();
+    }
+
+    [Fact]
     public void PublicStateIsReadOnlyAndCannotExpressContradictoryBranches()
     {
-        AssertReadOnlyProperties(typeof(LogicalCodecFailure), nameof(LogicalCodecFailure.Code), nameof(LogicalCodecFailure.ByteOffset), nameof(LogicalCodecFailure.Field));
+        AssertReadOnlyProperties(
+            typeof(LogicalCodecFailure),
+            nameof(LogicalCodecFailure.Code),
+            nameof(LogicalCodecFailure.ByteOffset),
+            nameof(LogicalCodecFailure.Field),
+            nameof(LogicalCodecFailure.RecordIndex),
+            nameof(LogicalCodecFailure.ElementIndex));
         AssertReadOnlyProperties(typeof(LogicalEncodeResult), nameof(LogicalEncodeResult.Succeeded), nameof(LogicalEncodeResult.Failure));
         AssertReadOnlyProperties(typeof(LogicalDecodeResult<>), nameof(LogicalDecodeResult<>.Succeeded), nameof(LogicalDecodeResult<>.Value), nameof(LogicalDecodeResult<>.Failure));
 
@@ -50,38 +103,108 @@ public sealed class LogicalCodecResultTests
     }
 
     [Fact]
-    public void FailureFactoryRejectsUndefinedUnknownOrNegativeComponents()
+    public void FailureFactoriesRejectUndefinedUnknownOrNegativeComponents()
     {
-        AssertFactoryThrows<ArgumentOutOfRangeException>(
-            typeof(LogicalCodecFailure),
-            "Create",
+        AssertFailureFactoryThrows<ArgumentOutOfRangeException>(
+            LegacyFailureFactoryParameters,
             LogicalCodecFailureCode.Undefined,
             0,
             LogicalCodecField.RecordKey);
-        AssertFactoryThrows<ArgumentOutOfRangeException>(
-            typeof(LogicalCodecFailure),
-            "Create",
+        AssertFailureFactoryThrows<ArgumentOutOfRangeException>(
+            LegacyFailureFactoryParameters,
             (LogicalCodecFailureCode)byte.MaxValue,
             0,
             LogicalCodecField.RecordKey);
-        AssertFactoryThrows<ArgumentOutOfRangeException>(
-            typeof(LogicalCodecFailure),
-            "Create",
+        AssertFailureFactoryThrows<ArgumentOutOfRangeException>(
+            LegacyFailureFactoryParameters,
             LogicalCodecFailureCode.IncorrectLength,
             -1,
             LogicalCodecField.RecordKey);
-        AssertFactoryThrows<ArgumentOutOfRangeException>(
-            typeof(LogicalCodecFailure),
-            "Create",
+        AssertFailureFactoryThrows<ArgumentOutOfRangeException>(
+            LegacyFailureFactoryParameters,
             LogicalCodecFailureCode.IncorrectLength,
             0,
             LogicalCodecField.Undefined);
-        AssertFactoryThrows<ArgumentOutOfRangeException>(
-            typeof(LogicalCodecFailure),
-            "Create",
+        AssertFailureFactoryThrows<ArgumentOutOfRangeException>(
+            LegacyFailureFactoryParameters,
             LogicalCodecFailureCode.IncorrectLength,
             0,
             (LogicalCodecField)byte.MaxValue);
+
+        AssertFailureFactoryThrows<ArgumentOutOfRangeException>(
+            DetailedFailureFactoryParameters,
+            LogicalCodecFailureCode.Undefined,
+            0,
+            LogicalCodecField.Header,
+            -1,
+            -1);
+        AssertFailureFactoryThrows<ArgumentOutOfRangeException>(
+            DetailedFailureFactoryParameters,
+            LogicalCodecFailureCode.InvalidHeader,
+            0,
+            LogicalCodecField.Undefined,
+            -1,
+            -1);
+    }
+
+    [Fact]
+    public void LegacyAndDetailedFailureFactoriesProduceValidatedImmutableMetadata()
+    {
+        LogicalCodecFailure legacy = InvokeFailureFactory(
+            LegacyFailureFactoryParameters,
+            LogicalCodecFailureCode.IncorrectLength,
+            30,
+            LogicalCodecField.RecordKey);
+        LogicalCodecFailure detailed = InvokeFailureFactory(
+            DetailedFailureFactoryParameters,
+            LogicalCodecFailureCode.InvalidHeader,
+            4,
+            LogicalCodecField.Header,
+            2,
+            7);
+
+        Assert.Equal(LogicalCodecFailureCode.IncorrectLength, legacy.Code);
+        Assert.Equal(30, legacy.ByteOffset);
+        Assert.Equal(LogicalCodecField.RecordKey, legacy.Field);
+        Assert.Equal(-1, legacy.RecordIndex);
+        Assert.Equal(-1, legacy.ElementIndex);
+
+        Assert.Equal(LogicalCodecFailureCode.InvalidHeader, detailed.Code);
+        Assert.Equal(4, detailed.ByteOffset);
+        Assert.Equal(LogicalCodecField.Header, detailed.Field);
+        Assert.Equal(2, detailed.RecordIndex);
+        Assert.Equal(7, detailed.ElementIndex);
+    }
+
+    [Theory]
+    [InlineData(-2, -1)]
+    [InlineData(-1, -2)]
+    public void DetailedFailureFactoryRejectsInvalidOptionalMetadata(int recordIndex, int elementIndex)
+    {
+        AssertFailureFactoryThrows<ArgumentOutOfRangeException>(
+            DetailedFailureFactoryParameters,
+            LogicalCodecFailureCode.InvalidHeader,
+            0,
+            LogicalCodecField.Header,
+            recordIndex,
+            elementIndex);
+    }
+
+    [Theory]
+    [InlineData(-1, 0)]
+    [InlineData(0, -1)]
+    public void DetailedFailureFactoryAllowsUnavailableMetadataIndependently(int recordIndex, int elementIndex)
+    {
+        LogicalCodecFailure failure = InvokeFailureFactory(
+            DetailedFailureFactoryParameters,
+            LogicalCodecFailureCode.InvalidHeader,
+            0,
+            LogicalCodecField.Header,
+            recordIndex,
+            elementIndex);
+
+        Assert.Equal(recordIndex, failure.RecordIndex);
+        Assert.Equal(elementIndex, failure.ElementIndex);
     }
 
     [Fact]
@@ -127,6 +250,28 @@ public sealed class LogicalCodecResultTests
     }
 
     [Fact]
+    public void EncodeSuccessAndFailureAreMutuallyExclusive()
+    {
+        LogicalCodecFailure failureValue = InvokeFailureFactory(
+            DetailedFailureFactoryParameters,
+            LogicalCodecFailureCode.InvalidValue,
+            5,
+            LogicalCodecField.Payload,
+            0,
+            1);
+        LogicalEncodeResult success = Assert.IsType<LogicalEncodeResult>(
+            GetInternalFactory(typeof(LogicalEncodeResult), "Success").Invoke(null, null));
+        LogicalEncodeResult failure = Assert.IsType<LogicalEncodeResult>(
+            GetInternalFactory(typeof(LogicalEncodeResult), "Failed").Invoke(null, [failureValue]));
+
+        Assert.True(success.Succeeded);
+        Assert.Null(success.Failure);
+
+        Assert.False(failure.Succeeded);
+        Assert.Same(failureValue, failure.Failure);
+    }
+
+    [Fact]
     public void InternalFactoriesRejectNullReferenceValuesAndFailures()
     {
         AssertFactoryThrows<ArgumentNullException>(typeof(LogicalEncodeResult), "Failed", (object?)null);
@@ -134,11 +279,41 @@ public sealed class LogicalCodecResultTests
         AssertFactoryThrows<ArgumentNullException>(typeof(LogicalDecodeResult<ReferenceProbe>), "Failed", (object?)null);
     }
 
+    private static readonly Type[] LegacyFailureFactoryParameters =
+    [
+        typeof(LogicalCodecFailureCode),
+        typeof(int),
+        typeof(LogicalCodecField),
+    ];
+
+    private static readonly Type[] DetailedFailureFactoryParameters =
+    [
+        typeof(LogicalCodecFailureCode),
+        typeof(int),
+        typeof(LogicalCodecField),
+        typeof(int),
+        typeof(int),
+    ];
+
     private static LogicalDecodeResult<T> InvokeDecodeFactory<T>(string name, object argument)
         where T : notnull
     {
         MethodInfo factory = GetInternalFactory(typeof(LogicalDecodeResult<T>), name);
         return Assert.IsType<LogicalDecodeResult<T>>(factory.Invoke(null, [argument]));
+    }
+
+    private static LogicalCodecFailure InvokeFailureFactory(Type[] parameterTypes, params object[] arguments)
+    {
+        MethodInfo factory = GetInternalFactory(typeof(LogicalCodecFailure), "Create", parameterTypes);
+        return Assert.IsType<LogicalCodecFailure>(factory.Invoke(null, arguments));
+    }
+
+    private static void AssertFailureFactoryThrows<TException>(Type[] parameterTypes, params object?[] arguments)
+        where TException : Exception
+    {
+        MethodInfo factory = GetInternalFactory(typeof(LogicalCodecFailure), "Create", parameterTypes);
+        TargetInvocationException exception = Assert.Throws<TargetInvocationException>(() => factory.Invoke(null, arguments));
+        _ = Assert.IsType<TException>(exception.InnerException);
     }
 
     private static void AssertFactoryThrows<TException>(Type owner, string name, params object?[] arguments)
@@ -151,7 +326,19 @@ public sealed class LogicalCodecResultTests
 
     private static MethodInfo GetInternalFactory(Type owner, string name)
     {
-        return owner.GetMethod(name, BindingFlags.Static | BindingFlags.NonPublic)
+        return owner.GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
+            .SingleOrDefault(method => method.Name == name)
+            ?? throw new InvalidOperationException($"Could not locate internal factory {owner.Name}.{name}.");
+    }
+
+    private static MethodInfo GetInternalFactory(Type owner, string name, Type[] parameterTypes)
+    {
+        return owner.GetMethod(
+            name,
+            BindingFlags.Static | BindingFlags.NonPublic,
+            binder: null,
+            types: parameterTypes,
+            modifiers: null)
             ?? throw new InvalidOperationException($"Could not locate internal factory {owner.Name}.{name}.");
     }
 
@@ -164,6 +351,13 @@ public sealed class LogicalCodecResultTests
             Assert.True(property.CanRead);
             Assert.False(property.CanWrite);
         }
+    }
+
+    private static void AssertEnumValuesAreUnique<TEnum>()
+        where TEnum : struct, Enum
+    {
+        TEnum[] values = Enum.GetValues<TEnum>();
+        Assert.Equal(values.Length, values.Distinct().Count());
     }
 
     private sealed class ReferenceProbe(string name)
