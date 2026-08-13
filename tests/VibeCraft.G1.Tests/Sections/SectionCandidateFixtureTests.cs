@@ -29,8 +29,8 @@ public sealed class SectionCandidateFixtureTests
     {
         SectionGeometry geometry = new(new SectionSide(side));
         SectionFixtureKind kind = (SectionFixtureKind)kindValue;
-        WorldStateId[] first = SectionCandidateFixture.CreateStates(geometry, kind);
-        WorldStateId[] second = SectionCandidateFixture.CreateStates(geometry, kind);
+        BlockStateId[] first = SectionCandidateFixture.CreateStates(geometry, kind);
+        BlockStateId[] second = SectionCandidateFixture.CreateStates(geometry, kind);
 
         Assert.Equal(first, second);
         Assert.Equal(side * side * side, first.Length);
@@ -40,17 +40,17 @@ public sealed class SectionCandidateFixtureTests
     public void FixtureDefinitionsHaveExpectedSemanticShapes()
     {
         SectionGeometry geometry = SectionGeometry.Side16;
-        WorldStateId[] air = SectionCandidateFixture.CreateStates(geometry, SectionFixtureKind.UniformAir);
-        WorldStateId[] stone = SectionCandidateFixture.CreateStates(geometry, SectionFixtureKind.UniformStone);
-        WorldStateId[] layered = SectionCandidateFixture.CreateStates(geometry, SectionFixtureKind.Layered);
-        WorldStateId[] entropy = SectionCandidateFixture.CreateStates(geometry, SectionFixtureKind.HighEntropy);
+        BlockStateId[] air = SectionCandidateFixture.CreateStates(geometry, SectionFixtureKind.UniformAir);
+        BlockStateId[] stone = SectionCandidateFixture.CreateStates(geometry, SectionFixtureKind.UniformStone);
+        BlockStateId[] layered = SectionCandidateFixture.CreateStates(geometry, SectionFixtureKind.Layered);
+        BlockStateId[] entropy = SectionCandidateFixture.CreateStates(geometry, SectionFixtureKind.HighEntropy);
 
         Assert.All(air, value => Assert.Equal(0U, value.Value));
         Assert.All(stone, value => Assert.Equal(1U, value.Value));
-        Assert.Equal(new WorldStateId(1), layered[0]);
-        Assert.Equal(new WorldStateId(2), layered[8 * 16 * 16]);
-        Assert.Equal(new WorldStateId(3), layered[9 * 16 * 16]);
-        Assert.Equal(new WorldStateId(0), layered[10 * 16 * 16]);
+        Assert.Equal(new BlockStateId(1), layered[0]);
+        Assert.Equal(new BlockStateId(2), layered[8 * 16 * 16]);
+        Assert.Equal(new BlockStateId(3), layered[9 * 16 * 16]);
+        Assert.Equal(new BlockStateId(0), layered[10 * 16 * 16]);
         Assert.Equal(Enumerable.Range(1, entropy.Length).Select(value => checked((uint)value)), entropy.Select(value => value.Value));
     }
 
@@ -74,7 +74,7 @@ public sealed class SectionCandidateFixtureTests
     [InlineData(257)]
     public void PaletteBoundaryFixtureContainsExactDistinctCount(int paletteSize)
     {
-        WorldStateId[] states = SectionCandidateFixture.CreateStates(
+        BlockStateId[] states = SectionCandidateFixture.CreateStates(
             SectionGeometry.Side16,
             SectionFixtureKind.PaletteBoundary,
             paletteSize: paletteSize);
@@ -85,8 +85,8 @@ public sealed class SectionCandidateFixtureTests
     [Fact]
     public void EightSide16SectionsReconstructTheIdenticalCanonicalSide32Cube()
     {
-        WorldStateId[] canonical = SectionCandidateFixture.CreateStates(SectionGeometry.Side32, SectionFixtureKind.Mixed);
-        WorldStateId[] reconstructed = new WorldStateId[canonical.Length];
+        BlockStateId[] canonical = SectionCandidateFixture.CreateStates(SectionGeometry.Side32, SectionFixtureKind.Mixed);
+        BlockStateId[] reconstructed = new BlockStateId[canonical.Length];
 
         for (int sectionY = 0; sectionY < 2; sectionY++)
         {
@@ -94,7 +94,7 @@ public sealed class SectionCandidateFixtureTests
             {
                 for (int sectionX = 0; sectionX < 2; sectionX++)
                 {
-                    WorldStateId[] octant = SectionCandidateFixture.ExtractSide16(canonical, sectionX, sectionY, sectionZ);
+                    BlockStateId[] octant = SectionCandidateFixture.ExtractSide16(canonical, sectionX, sectionY, sectionZ);
                     for (int y = 0; y < 16; y++)
                     {
                         for (int z = 0; z < 16; z++)
@@ -120,16 +120,16 @@ public sealed class SectionCandidateFixtureTests
     [Fact]
     public void FixtureConstructionPreflightsRevisionHeadroomAndReturnsExactDenseState()
     {
-        WorldStateId[] semantic = new WorldStateId[16 * 16 * 16];
-        semantic[1] = new WorldStateId(4);
-        semantic[50] = new WorldStateId(5);
-        semantic[^1] = new WorldStateId(6);
+        BlockStateId[] semantic = new BlockStateId[16 * 16 * 16];
+        semantic[1] = new BlockStateId(4);
+        semantic[50] = new BlockStateId(5);
+        semantic[^1] = new BlockStateId(6);
 
         MutableSectionBlockStates section = SectionCandidateFixture.CreateSection(
             SectionGeometry.Side16,
             semantic,
             new(long.MaxValue - 3));
-        WorldStateId[] actual = new WorldStateId[semantic.Length];
+        BlockStateId[] actual = new BlockStateId[semantic.Length];
         section.CopyTo(actual);
 
         Assert.Equal(semantic, actual);
@@ -139,11 +139,11 @@ public sealed class SectionCandidateFixtureTests
     [Fact]
     public void FixtureConstructionRefusesNearExhaustionBeforeProducingPartialState()
     {
-        WorldStateId[] semantic = new WorldStateId[16 * 16 * 16];
-        semantic[1] = new WorldStateId(4);
-        semantic[50] = new WorldStateId(5);
-        semantic[^1] = new WorldStateId(6);
-        WorldStateId[] unchanged = (WorldStateId[])semantic.Clone();
+        BlockStateId[] semantic = new BlockStateId[16 * 16 * 16];
+        semantic[1] = new BlockStateId(4);
+        semantic[50] = new BlockStateId(5);
+        semantic[^1] = new BlockStateId(6);
+        BlockStateId[] unchanged = (BlockStateId[])semantic.Clone();
 
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => SectionCandidateFixture.CreateSection(
             SectionGeometry.Side16,
@@ -162,7 +162,7 @@ public sealed class SectionCandidateFixtureTests
     public void EqualVolumeGlobalPathsMatchCanonicalWorldForEveryFixture(int fixtureValue)
     {
         SectionFixtureKind fixture = (SectionFixtureKind)fixtureValue;
-        WorldStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(fixture);
+        BlockStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(fixture);
         foreach (SectionEqualVolumeLayout layout in Enum.GetValues<SectionEqualVolumeLayout>())
         {
             MutableSectionBlockStates[] sections = SectionEqualVolumeFixture.CreateSections(layout, canonical);
@@ -171,8 +171,8 @@ public sealed class SectionCandidateFixtureTests
                 Assert.Equal(canonical[index], SectionEqualVolumeFixture.GetGlobal(sections, layout, index));
             }
 
-            WorldStateId[] projection = new WorldStateId[canonical.Length];
-            WorldStateId[][] scratch = CreateSide16Scratch();
+            BlockStateId[] projection = new BlockStateId[canonical.Length];
+            BlockStateId[][] scratch = CreateSide16Scratch();
             SectionEqualVolumeFixture.CopyToCanonical(sections, layout, projection, scratch);
             Assert.Equal(canonical, projection);
         }
@@ -187,7 +187,7 @@ public sealed class SectionCandidateFixtureTests
             .. Enumerable.Range(0, 8)
                 .Select(_ => new MutableSectionBlockStates(SectionGeometry.Side32, default, default)),
         ];
-        WorldStateId[] projection = new WorldStateId[SectionEqualVolumeFixture.CubeVolume];
+        BlockStateId[] projection = new BlockStateId[SectionEqualVolumeFixture.CubeVolume];
 
         _ = Assert.Throws<ArgumentException>(() => SectionEqualVolumeFixture.GetGlobal(
             oneSide16,
@@ -196,7 +196,7 @@ public sealed class SectionCandidateFixtureTests
         _ = Assert.Throws<ArgumentException>(() => SectionEqualVolumeFixture.SetGlobal(
             eightSide32,
             SectionEqualVolumeLayout.EightSide16,
-            new SectionEdit(0, new WorldStateId(1), SectionEditIntent.NewStateChange)));
+            new SectionEdit(0, new BlockStateId(1), SectionEditIntent.NewStateChange)));
         _ = Assert.Throws<ArgumentException>(() => SectionEqualVolumeFixture.CopyToCanonical(
             eightSide32,
             SectionEqualVolumeLayout.EightSide16,
@@ -207,17 +207,17 @@ public sealed class SectionCandidateFixtureTests
     [Fact]
     public void EqualVolumeProjectionRejectsAliasedSide16ScratchArrays()
     {
-        WorldStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(SectionFixtureKind.Mixed);
+        BlockStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(SectionFixtureKind.Mixed);
         MutableSectionBlockStates[] sections = SectionEqualVolumeFixture.CreateSections(
             SectionEqualVolumeLayout.EightSide16,
             canonical);
-        WorldStateId[] shared = new WorldStateId[16 * 16 * 16];
-        WorldStateId[][] aliasedScratch = [.. Enumerable.Repeat(shared, 8)];
+        BlockStateId[] shared = new BlockStateId[16 * 16 * 16];
+        BlockStateId[][] aliasedScratch = [.. Enumerable.Repeat(shared, 8)];
 
         _ = Assert.Throws<ArgumentException>(() => SectionEqualVolumeFixture.CopyToCanonical(
             sections,
             SectionEqualVolumeLayout.EightSide16,
-            new WorldStateId[canonical.Length],
+            new BlockStateId[canonical.Length],
             aliasedScratch));
     }
 
@@ -236,14 +236,14 @@ public sealed class SectionCandidateFixtureTests
     {
         SectionFixtureKind fixture = (SectionFixtureKind)fixtureValue;
         SectionEditTraceKind traceKind = (SectionEditTraceKind)traceValue;
-        WorldStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(fixture);
+        BlockStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(fixture);
         SectionEdit[] trace = SectionEqualVolumeFixture.CreateEditTrace(canonical, traceKind, clusterCount: 8);
         Assert.Contains(trace, edit => edit.Intent == SectionEditIntent.NoOp);
         Assert.Contains(trace, edit => edit.Intent == SectionEditIntent.NewStateChange);
 
         foreach (SectionEqualVolumeLayout layout in Enum.GetValues<SectionEqualVolumeLayout>())
         {
-            WorldStateId[] dense = (WorldStateId[])canonical.Clone();
+            BlockStateId[] dense = (BlockStateId[])canonical.Clone();
             MutableSectionBlockStates[] sections = SectionEqualVolumeFixture.CreateSections(layout, canonical);
             foreach (SectionEdit edit in trace)
             {
@@ -253,7 +253,7 @@ public sealed class SectionCandidateFixtureTests
                 Assert.Equal(dense[edit.GlobalIndex], SectionEqualVolumeFixture.GetGlobal(sections, layout, edit.GlobalIndex));
             }
 
-            WorldStateId[] projection = new WorldStateId[dense.Length];
+            BlockStateId[] projection = new BlockStateId[dense.Length];
             SectionEqualVolumeFixture.CopyToCanonical(sections, layout, projection, CreateSide16Scratch());
             Assert.Equal(dense, projection);
         }
@@ -265,10 +265,10 @@ public sealed class SectionCandidateFixtureTests
     public void WarmedEqualVolumeGetAndCopyHotPathsAllocateNothing(int layoutValue)
     {
         SectionEqualVolumeLayout layout = (SectionEqualVolumeLayout)layoutValue;
-        WorldStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(SectionFixtureKind.Mixed);
+        BlockStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(SectionFixtureKind.Mixed);
         MutableSectionBlockStates[] sections = SectionEqualVolumeFixture.CreateSections(layout, canonical);
-        WorldStateId[] projection = new WorldStateId[canonical.Length];
-        WorldStateId[][] scratch = CreateSide16Scratch();
+        BlockStateId[] projection = new BlockStateId[canonical.Length];
+        BlockStateId[][] scratch = CreateSide16Scratch();
 
         for (int warmup = 0; warmup < 4; warmup++)
         {
@@ -305,7 +305,7 @@ public sealed class SectionCandidateFixtureTests
         MutableSectionBlockStates uniform = new(geometry, default, default);
         Assert.Equal(sizeof(uint), uniform.GetStorageMetrics().KnownPayloadBytes);
 
-        _ = uniform.TrySet(geometry.CreateLocal(1, 0, 0), new WorldStateId(1));
+        _ = uniform.TrySet(geometry.CreateLocal(1, 0, 0), new BlockStateId(1));
         SectionStorageMetrics paletted = uniform.GetStorageMetrics();
         long packedWordCount = (volume + 63L) / 64L;
         long expectedPaletted = (2L * sizeof(uint)) + (packedWordCount * sizeof(ulong));
@@ -315,7 +315,7 @@ public sealed class SectionCandidateFixtureTests
         MutableSectionBlockStates direct = new(geometry, default, default);
         for (int index = 1; index <= 256; index++)
         {
-            _ = direct.TrySet(SectionCandidateFixture.ToLocal(index, side), new WorldStateId(checked((uint)index)));
+            _ = direct.TrySet(SectionCandidateFixture.ToLocal(new LocalIndex(index), geometry), new BlockStateId(checked((uint)index)));
         }
 
         SectionStorageMetrics directMetrics = direct.GetStorageMetrics();
@@ -323,8 +323,8 @@ public sealed class SectionCandidateFixtureTests
         Assert.Equal(1, directMetrics.OwnedArrayCount);
     }
 
-    private static WorldStateId[][] CreateSide16Scratch()
+    private static BlockStateId[][] CreateSide16Scratch()
     {
-        return [.. Enumerable.Range(0, 8).Select(_ => new WorldStateId[16 * 16 * 16])];
+        return [.. Enumerable.Range(0, 8).Select(_ => new BlockStateId[16 * 16 * 16])];
     }
 }

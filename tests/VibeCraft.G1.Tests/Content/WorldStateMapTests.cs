@@ -9,13 +9,13 @@ public sealed class WorldStateMapTests
     [Fact]
     public void EmptyMapBindsZeroExactlyToAir()
     {
-        Assert.True(WorldStateMap.Empty.TryGetState(new WorldStateId(0), out CanonicalBlockState? state));
+        Assert.True(WorldStateMap.Empty.TryGetState(new BlockStateId(0), out CanonicalBlockState? state));
         Assert.Equal(CanonicalBlockState.Air, state);
-        Assert.True(WorldStateMap.Empty.TryGetId(CanonicalBlockState.Air, out WorldStateId id));
-        Assert.Equal(new WorldStateId(0), id);
+        Assert.True(WorldStateMap.Empty.TryGetId(CanonicalBlockState.Air, out BlockStateId id));
+        Assert.Equal(new BlockStateId(0), id);
 
         _ = Assert.Throws<ArgumentException>(() => WorldStateMap.Restore(
-            [new WorldStateBinding(new WorldStateId(0), State("vibecraft:stone"))]));
+            [new WorldStateBinding(new BlockStateId(0), State("vibecraft:stone"))]));
         _ = Assert.Throws<InvalidOperationException>(() => WorldStateMap.Restore([default]));
     }
 
@@ -25,12 +25,12 @@ public sealed class WorldStateMapTests
         CanonicalBlockState stone = State("vibecraft:stone");
         CanonicalBlockState grass = State("vibecraft:grass_block");
         CanonicalBlockState log = new(
-            ContentKey.Parse("vibecraft:oak_log"),
-            [BlockStateProperty.Create(ContentKey.Parse("vibecraft:axis"), "y")]);
+            NamespacedContentId.Parse("vibecraft:oak_log"),
+            [BlockStateProperty.Create(NamespacedContentId.Parse("vibecraft:axis"), "y")]);
         WorldStateMap prior = WorldStateMap.Restore(
             [
-                new WorldStateBinding(new WorldStateId(0), CanonicalBlockState.Air),
-                new WorldStateBinding(new WorldStateId(7), stone),
+                new WorldStateBinding(new BlockStateId(0), CanonicalBlockState.Air),
+                new WorldStateBinding(new BlockStateId(7), stone),
             ]);
 
         WorldStateReconciliation first = prior.Reconcile([log, grass, stone]);
@@ -40,10 +40,10 @@ public sealed class WorldStateMapTests
         Assert.True(second.Success);
         Assert.Equal(BindingProjection(first.Mapping!), BindingProjection(second.Mapping!));
         WorldStateMap reconciled = first.Mapping!;
-        Assert.Equal(new WorldStateId(7), GetId(reconciled, stone));
-        Assert.Equal(new WorldStateId(8), GetId(reconciled, grass));
-        Assert.Equal(new WorldStateId(9), GetId(reconciled, log));
-        Assert.Equal(new WorldStateId(7), GetId(prior, stone));
+        Assert.Equal(new BlockStateId(7), GetId(reconciled, stone));
+        Assert.Equal(new BlockStateId(8), GetId(reconciled, grass));
+        Assert.Equal(new BlockStateId(9), GetId(reconciled, log));
+        Assert.Equal(new BlockStateId(7), GetId(prior, stone));
     }
 
     [Property(MaxTest = 100)]
@@ -66,8 +66,8 @@ public sealed class WorldStateMapTests
         CanonicalBlockState retained = State("vibecraft:retained");
         WorldStateMap full = WorldStateMap.Restore(
             [
-                new WorldStateBinding(new WorldStateId(0), CanonicalBlockState.Air),
-                new WorldStateBinding(new WorldStateId(uint.MaxValue), retained),
+                new WorldStateBinding(new BlockStateId(0), CanonicalBlockState.Air),
+                new WorldStateBinding(new BlockStateId(uint.MaxValue), retained),
             ]);
 
         WorldStateReconciliation result = full.Reconcile([retained, State("vibecraft:new_state")]);
@@ -75,7 +75,7 @@ public sealed class WorldStateMapTests
         Assert.False(result.Success);
         Assert.Null(result.Mapping);
         Assert.Equal(WorldStateReconciliationError.IdExhausted, result.Error);
-        Assert.Equal(new WorldStateId(uint.MaxValue), GetId(full, retained));
+        Assert.Equal(new BlockStateId(uint.MaxValue), GetId(full, retained));
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public sealed class WorldStateMapTests
         RuntimeStateMap first = RuntimeStateMap.Create(map, [stone, grass]);
         RuntimeStateMap second = RuntimeStateMap.Create(map, [grass, stone]);
 
-        Assert.Equal(new RuntimeStateId(0), Resolve(first, new WorldStateId(0)));
+        Assert.Equal(new RuntimeStateId(0), Resolve(first, new BlockStateId(0)));
         Assert.Equal(Resolve(first, GetId(map, grass)), Resolve(second, GetId(map, grass)));
         Assert.Equal(Resolve(first, GetId(map, stone)), Resolve(second, GetId(map, stone)));
     }
@@ -101,13 +101,13 @@ public sealed class WorldStateMapTests
 
         _ = Assert.Throws<ArgumentException>(() => map.Reconcile(nullState));
         _ = Assert.Throws<ArgumentException>(() => RuntimeStateMap.Create(map, nullState));
-        _ = Assert.Throws<ArgumentNullException>(() => new WorldStateBinding(new WorldStateId(1), null!));
+        _ = Assert.Throws<ArgumentNullException>(() => new WorldStateBinding(new BlockStateId(1), null!));
     }
 
     [Fact]
     public void TotalStateCeilingIncludesAirAndBoundsRestoreBeforeEnumeration()
     {
-        WorldStateBinding air = new(new WorldStateId(0), CanonicalBlockState.Air);
+        WorldStateBinding air = new(new BlockStateId(0), CanonicalBlockState.Air);
         CountedCollection<WorldStateBinding> tooMany = new(air, WorldStateMap.MaxTotalStates + 1);
 
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => WorldStateMap.Restore(tooMany));
@@ -137,10 +137,10 @@ public sealed class WorldStateMapTests
         CanonicalBlockState[] states =
         [
             .. Enumerable.Range(0, 24).Select(index => new CanonicalBlockState(
-                ContentKey.Parse($"mod_{seed % 31}:state_{index}"),
+                NamespacedContentId.Parse($"mod_{seed % 31}:state_{index}"),
                 [
                     BlockStateProperty.Create(
-                        ContentKey.Parse("vibecraft:variant"),
+                        NamespacedContentId.Parse("vibecraft:variant"),
                         $"v_{(seed + (uint)index) % 7}"),
                 ])),
         ];
@@ -154,7 +154,7 @@ public sealed class WorldStateMapTests
         Assert.Equal(BindingProjection(orderedWorld), BindingProjection(shuffledWorld));
         foreach (CanonicalBlockState state in states)
         {
-            WorldStateId worldId = GetId(restored, state);
+            BlockStateId worldId = GetId(restored, state);
             Assert.True(restored.TryGetState(worldId, out CanonicalBlockState? restoredState));
             Assert.Equal(state, restoredState);
 
@@ -167,16 +167,16 @@ public sealed class WorldStateMapTests
 
     private static CanonicalBlockState State(string key)
     {
-        return new CanonicalBlockState(ContentKey.Parse(key), []);
+        return new CanonicalBlockState(NamespacedContentId.Parse(key), []);
     }
 
-    private static WorldStateId GetId(WorldStateMap map, CanonicalBlockState state)
+    private static BlockStateId GetId(WorldStateMap map, CanonicalBlockState state)
     {
-        Assert.True(map.TryGetId(state, out WorldStateId id));
+        Assert.True(map.TryGetId(state, out BlockStateId id));
         return id;
     }
 
-    private static RuntimeStateId Resolve(RuntimeStateMap map, WorldStateId id)
+    private static RuntimeStateId Resolve(RuntimeStateMap map, BlockStateId id)
     {
         Assert.True(map.TryResolve(id, out RuntimeStateId runtimeId));
         return runtimeId;
@@ -188,7 +188,7 @@ public sealed class WorldStateMapTests
         return Assert.IsType<CanonicalBlockState>(state);
     }
 
-    private static IEnumerable<(WorldStateId Id, string State)> BindingProjection(WorldStateMap map)
+    private static IEnumerable<(BlockStateId Id, string State)> BindingProjection(WorldStateMap map)
     {
         return map.Bindings.Select(binding => (binding.Id, binding.State.ToString()));
     }

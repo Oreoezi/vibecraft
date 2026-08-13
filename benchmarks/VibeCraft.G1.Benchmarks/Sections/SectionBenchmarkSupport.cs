@@ -56,10 +56,10 @@ internal static class SectionBenchmarkSupport
         return trace;
     }
 
-    internal static ulong Checksum(ReadOnlySpan<WorldStateId> states)
+    internal static ulong Checksum(ReadOnlySpan<BlockStateId> states)
     {
         ulong checksum = 0xCBF29CE484222325UL;
-        foreach (WorldStateId state in states)
+        foreach (BlockStateId state in states)
         {
             checksum = unchecked((checksum ^ state.Value) * 0x100000001B3UL);
         }
@@ -77,12 +77,12 @@ internal static class SectionBenchmarkSupport
         return unchecked((checksum ^ (uint)result) * 0x100000001B3UL);
     }
 
-    internal static WorldStateId[][] CreateSide16Scratch()
+    internal static BlockStateId[][] CreateSide16Scratch()
     {
-        WorldStateId[][] scratch = new WorldStateId[8][];
+        BlockStateId[][] scratch = new BlockStateId[8][];
         for (int index = 0; index < scratch.Length; index++)
         {
-            scratch[index] = new WorldStateId[16 * 16 * 16];
+            scratch[index] = new BlockStateId[16 * 16 * 16];
         }
 
         return scratch;
@@ -91,7 +91,7 @@ internal static class SectionBenchmarkSupport
     internal static void ValidateEqualWorld(
         IReadOnlySectionBlockStates[] sections,
         SectionEqualVolumeLayout layout,
-        ReadOnlySpan<WorldStateId> canonical)
+        ReadOnlySpan<BlockStateId> canonical)
     {
         if (canonical.Length != SectionEqualVolumeFixture.CubeVolume)
         {
@@ -106,7 +106,7 @@ internal static class SectionBenchmarkSupport
             }
         }
 
-        WorldStateId[] projection = new WorldStateId[canonical.Length];
+        BlockStateId[] projection = new BlockStateId[canonical.Length];
         SectionEqualVolumeFixture.CopyToCanonical(sections, layout, projection, CreateSide16Scratch());
         if (!projection.AsSpan().SequenceEqual(canonical))
         {

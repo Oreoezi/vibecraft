@@ -12,11 +12,11 @@ public sealed class ContentLockAndRecoveryTests
     {
         ContentFingerprintEntry first = ContentFingerprintEntry.Create(
             ContentRegistryId.Block,
-            ContentKey.Parse("vibecraft:stone"),
+            NamespacedContentId.Parse("vibecraft:stone"),
             "vibecraft:stone");
         ContentFingerprintEntry second = ContentFingerprintEntry.Create(
             ContentRegistryId.Block,
-            ContentKey.Parse("example:ore"),
+            NamespacedContentId.Parse("example:ore"),
             "example:ore[example:grade=rich]");
 
         ContentFingerprintInput ordered = ContentFingerprintInput.Create([first, second]);
@@ -34,7 +34,7 @@ public sealed class ContentLockAndRecoveryTests
     [Fact]
     public void FingerprintIdentityIncludesTypedRegistryAndRejectsOnlyDuplicateRegistryKeyPairs()
     {
-        ContentKey sharedKey = ContentKey.Parse("vibecraft:shared");
+        NamespacedContentId sharedKey = NamespacedContentId.Parse("vibecraft:shared");
         ContentFingerprintEntry block = ContentFingerprintEntry.Create(ContentRegistryId.Block, sharedKey, "block-definition");
         ContentFingerprintEntry blockTag = ContentFingerprintEntry.Create(ContentRegistryId.BlockTag, sharedKey, "block-tag-definition");
         ContentFingerprintEntry behavior = ContentFingerprintEntry.Create(
@@ -61,10 +61,10 @@ public sealed class ContentLockAndRecoveryTests
         ContentFingerprint actualB = Fingerprint('c');
         ContentProvider[] required =
         [
-            new ContentProvider(ContentKey.Parse("zmod:missing"), expectedA),
-            new ContentProvider(ContentKey.Parse("amod:mismatch"), expectedB),
+            new ContentProvider(NamespacedContentId.Parse("zmod:missing"), expectedA),
+            new ContentProvider(NamespacedContentId.Parse("amod:mismatch"), expectedB),
         ];
-        ContentProvider[] resolved = [new ContentProvider(ContentKey.Parse("amod:mismatch"), actualB)];
+        ContentProvider[] resolved = [new ContentProvider(NamespacedContentId.Parse("amod:mismatch"), actualB)];
 
         ContentLockValidation validation = RequiredContentLock.Validate(required, resolved);
         WorldOpenDecision decision = WorldOpenDecision.From(validation);
@@ -93,7 +93,7 @@ public sealed class ContentLockAndRecoveryTests
     [Fact]
     public void MatchingRequiredContentAllowsPreActivationTransition()
     {
-        ContentProvider provider = new(ContentKey.Parse("vibecraft:base"), Fingerprint('d'));
+        ContentProvider provider = new(NamespacedContentId.Parse("vibecraft:base"), Fingerprint('d'));
 
         ContentLockValidation validation = RequiredContentLock.Validate([provider], [provider]);
 
@@ -110,8 +110,8 @@ public sealed class ContentLockAndRecoveryTests
     public void UnresolvedStateIsBoundedRecoveryDataNotPlayableAirOrAWriteAuthority()
     {
         CanonicalBlockState missing = new(
-            ContentKey.Parse("missing:machine"),
-            [BlockStateProperty.Create(ContentKey.Parse("missing:facing"), "north")]);
+            NamespacedContentId.Parse("missing:machine"),
+            [BlockStateProperty.Create(NamespacedContentId.Parse("missing:facing"), "north")]);
         UnresolvedBlockState unresolved = UnresolvedBlockState.Create(missing, Fingerprint('e'), [1, 2, 3]);
         RecoveryWorldAccess recovery = RecoveryWorldAccess.Create(unresolved);
 
@@ -130,11 +130,11 @@ public sealed class ContentLockAndRecoveryTests
     public void DefaultFingerprintIsExplicitlyInvalidAndRejectedAtEveryFingerprintBoundary()
     {
         ContentFingerprint invalid = default;
-        CanonicalBlockState state = new(ContentKey.Parse("missing:machine"), []);
+        CanonicalBlockState state = new(NamespacedContentId.Parse("missing:machine"), []);
 
         Assert.False(invalid.IsValid);
         Assert.Equal("<invalid-content-fingerprint>", invalid.ToString());
-        _ = Assert.Throws<InvalidOperationException>(() => new ContentProvider(ContentKey.Parse("vibecraft:base"), invalid));
+        _ = Assert.Throws<InvalidOperationException>(() => new ContentProvider(NamespacedContentId.Parse("vibecraft:base"), invalid));
         _ = Assert.Throws<InvalidOperationException>(() => UnresolvedBlockState.Create(state, invalid, []));
         _ = Assert.Throws<InvalidOperationException>(() => RequiredContentLock.Validate(
             [default],
@@ -144,7 +144,7 @@ public sealed class ContentLockAndRecoveryTests
     [Fact]
     public void FingerprintEntriesRejectInvalidKeysEmptyOrOversizedUtf8DefinitionsAndNullInputEntries()
     {
-        ContentKey key = ContentKey.Parse("vibecraft:stone");
+        NamespacedContentId key = NamespacedContentId.Parse("vibecraft:stone");
 
         _ = Assert.Throws<ArgumentException>(() => ContentFingerprintEntry.Create(ContentRegistryId.Block, key, string.Empty));
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => ContentFingerprintEntry.Create(
@@ -169,7 +169,7 @@ public sealed class ContentLockAndRecoveryTests
     [Fact]
     public void FingerprintEntriesRejectInvalidUtf16InsteadOfCollidingWithReplacementCharacter()
     {
-        ContentKey key = ContentKey.Parse("vibecraft:stone");
+        NamespacedContentId key = NamespacedContentId.Parse("vibecraft:stone");
         ContentFingerprintEntry replacement = ContentFingerprintEntry.Create(ContentRegistryId.Block, key, "\uFFFD");
 
         _ = Assert.Throws<EncoderFallbackException>(() => ContentFingerprintEntry.Create(ContentRegistryId.Block, key, "\uD800"));
@@ -182,13 +182,13 @@ public sealed class ContentLockAndRecoveryTests
     {
         ContentFingerprintEntry single = ContentFingerprintEntry.Create(
             ContentRegistryId.Block,
-            ContentKey.Parse("a:b"),
+            NamespacedContentId.Parse("a:b"),
             "x");
         ContentFingerprintInput small = ContentFingerprintInput.Create([single]);
         string maximumDefinition = new('x', ContentFingerprintEntry.MaxCanonicalDefinitionUtf8Bytes);
         ContentFingerprintEntry maximumEntry = ContentFingerprintEntry.Create(
             ContentRegistryId.Block,
-            ContentKey.Parse("a:b"),
+            NamespacedContentId.Parse("a:b"),
             maximumDefinition);
         CountingRepeatEnumerable<ContentFingerprintEntry> overByteLimit = new(maximumEntry, 1_024);
 
@@ -214,7 +214,7 @@ public sealed class ContentLockAndRecoveryTests
         ContentProvider[] atLimit =
         [
             .. Enumerable.Range(0, RequiredContentLock.MaxProviders)
-                .Select(index => new ContentProvider(ContentKey.Parse($"provider:p_{index}"), fingerprint)),
+                .Select(index => new ContentProvider(NamespacedContentId.Parse($"provider:p_{index}"), fingerprint)),
         ];
         int yielded = 0;
 
@@ -230,7 +230,7 @@ public sealed class ContentLockAndRecoveryTests
             for (int index = 0; index <= RequiredContentLock.MaxProviders; index++)
             {
                 yielded++;
-                yield return new ContentProvider(ContentKey.Parse($"provider:overflow_{index}"), fingerprint);
+                yield return new ContentProvider(NamespacedContentId.Parse($"provider:overflow_{index}"), fingerprint);
             }
         }
     }
@@ -240,7 +240,7 @@ public sealed class ContentLockAndRecoveryTests
     {
         Assert.Empty(typeof(RequiredContentDiagnostic).GetConstructors());
         ConstructorInfo constructor = Assert.Single(typeof(RequiredContentDiagnostic).GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic));
-        ContentKey provider = ContentKey.Parse("vibecraft:base");
+        NamespacedContentId provider = NamespacedContentId.Parse("vibecraft:base");
         ContentFingerprint expected = Fingerprint('a');
 
         AssertConstructorRejects(constructor, provider, RequiredContentDiagnosticKind.Undefined, expected, null);
@@ -263,7 +263,7 @@ public sealed class ContentLockAndRecoveryTests
 
     private static void AssertConstructorRejects(
         ConstructorInfo constructor,
-        ContentKey provider,
+        NamespacedContentId provider,
         RequiredContentDiagnosticKind kind,
         ContentFingerprint expected,
         ContentFingerprint? actual)

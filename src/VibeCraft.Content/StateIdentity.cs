@@ -3,7 +3,7 @@ using System.Collections.Immutable;
 namespace VibeCraft.Content;
 
 /// <summary>Identifies one state in a world's block-state mapping.</summary>
-public readonly record struct WorldStateId(uint Value);
+public readonly record struct BlockStateId(uint Value);
 
 /// <summary>Identifies one resolved state for the lifetime of one runtime snapshot.</summary>
 public readonly record struct RuntimeStateId(uint Value);
@@ -14,7 +14,7 @@ public readonly record struct SessionStateId(uint Value);
 /// <summary>Defines one finite canonical block-state property.</summary>
 public readonly record struct BlockStateProperty
 {
-    private BlockStateProperty(ContentKey key, string value)
+    private BlockStateProperty(NamespacedContentId key, string value)
     {
         Key = key;
         Value = value;
@@ -24,7 +24,7 @@ public readonly record struct BlockStateProperty
     public const int MaxValueLength = 64;
 
     /// <summary>Gets the canonical property key.</summary>
-    public ContentKey Key { get; }
+    public NamespacedContentId Key { get; }
 
     /// <summary>Gets the canonical property value.</summary>
     public string Value { get; }
@@ -33,7 +33,7 @@ public readonly record struct BlockStateProperty
     public bool IsValid => Key.IsValid && Value is not null && Value.Length is > 0 and <= MaxValueLength && Value.All(IsValueCharacter);
 
     /// <summary>Creates a validated canonical property.</summary>
-    public static BlockStateProperty Create(ContentKey key, string value)
+    public static BlockStateProperty Create(NamespacedContentId key, string value)
     {
         ArgumentNullException.ThrowIfNull(value);
         key.ThrowIfInvalid();
@@ -51,7 +51,7 @@ public readonly record struct BlockStateProperty
 /// <summary>Defines the durable logical identity of one finite block state.</summary>
 public sealed class CanonicalBlockState : IEquatable<CanonicalBlockState>, IComparable<CanonicalBlockState>
 {
-    private static readonly ContentKey AirKey = ContentKey.Parse("vibecraft:air");
+    private static readonly NamespacedContentId AirKey = NamespacedContentId.Parse("vibecraft:air");
 
     /// <summary>The maximum number of properties in one G1 block-state identity.</summary>
     public const int MaxProperties = 32;
@@ -60,7 +60,7 @@ public sealed class CanonicalBlockState : IEquatable<CanonicalBlockState>, IComp
     public static CanonicalBlockState Air { get; } = new(AirKey, []);
 
     /// <summary>Initializes a block state and canonicalizes its properties by ordinal property key.</summary>
-    public CanonicalBlockState(ContentKey block, IEnumerable<BlockStateProperty> properties)
+    public CanonicalBlockState(NamespacedContentId block, IEnumerable<BlockStateProperty> properties)
     {
         ArgumentNullException.ThrowIfNull(properties);
         block.ThrowIfInvalid();
@@ -100,8 +100,8 @@ public sealed class CanonicalBlockState : IEquatable<CanonicalBlockState>, IComp
         Properties = [.. sorted];
     }
 
-    /// <summary>Gets the block's stable content key.</summary>
-    public ContentKey Block { get; }
+    /// <summary>Gets the block's stable namespaced content identifier.</summary>
+    public NamespacedContentId Block { get; }
 
     /// <summary>Gets properties in canonical ordinal key order.</summary>
     public ImmutableArray<BlockStateProperty> Properties { get; }

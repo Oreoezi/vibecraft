@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using VibeCraft.Content;
+using VibeCraft.Primitives.Coordinates;
 
 namespace VibeCraft.LogicalCodecs;
 
@@ -15,7 +16,7 @@ public sealed class LogicalSparseRecord
     /// <summary>The largest payload admitted for one sparse semantic fixture record.</summary>
     public const int MaxPayloadBytes = 64 * 1024;
 
-    private LogicalSparseRecord(int localIndex, ContentKey type, ImmutableArray<byte> payload)
+    private LogicalSparseRecord(LocalIndex localIndex, NamespacedContentId type, ImmutableArray<byte> payload)
     {
         LocalIndex = localIndex;
         Type = type;
@@ -23,10 +24,10 @@ public sealed class LogicalSparseRecord
     }
 
     /// <summary>Gets the X-contiguous/Z/Y local index for this sparse record.</summary>
-    public int LocalIndex { get; }
+    public LocalIndex LocalIndex { get; }
 
     /// <summary>Gets the canonical content type that owns this sparse payload.</summary>
-    public ContentKey Type { get; }
+    public NamespacedContentId Type { get; }
 
     /// <summary>Gets the copied opaque semantic payload.</summary>
     public ImmutableArray<byte> Payload { get; }
@@ -35,7 +36,7 @@ public sealed class LogicalSparseRecord
         ImmutableArray<LogicalSparseInput> inputs,
         int volume)
     {
-        HashSet<int> localIndices = [];
+        HashSet<LocalIndex> localIndices = [];
         List<LogicalSparseRecord> records = [];
         foreach (LogicalSparseInput input in inputs)
         {
@@ -54,13 +55,13 @@ public sealed class LogicalSparseRecord
         return [.. records.OrderBy(record => record.LocalIndex)];
     }
 
-    private static void ValidateLocalIndex(int localIndex, int volume, string parameterName)
+    private static void ValidateLocalIndex(LocalIndex localIndex, int volume, string parameterName)
     {
-        if (localIndex < 0 || localIndex >= volume)
+        if (localIndex.Value >= volume)
         {
             throw new ArgumentOutOfRangeException(
                 parameterName,
-                localIndex,
+                localIndex.Value,
                 $"A sparse local index must be in the range 0 through {volume - 1}.");
         }
     }
@@ -78,16 +79,15 @@ public readonly record struct LogicalSparseInput
     /// <summary>
     /// Initializes sparse semantic input and deep-copies its payload.
     /// </summary>
-    /// <param name="localIndex">The nonnegative section-local index; geometry validates its upper bound.</param>
+    /// <param name="localIndex">The section-local index; geometry validates its contextual upper bound.</param>
     /// <param name="type">The canonical content type that owns the payload.</param>
     /// <param name="payload">The opaque payload to copy.</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the index is negative or the payload is too large.</exception>
-    public LogicalSparseInput(int localIndex, ContentKey type, ReadOnlyMemory<byte> payload)
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the payload is too large.</exception>
+    public LogicalSparseInput(LocalIndex localIndex, NamespacedContentId type, ReadOnlyMemory<byte> payload)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(localIndex);
         if (!type.IsValid)
         {
-            throw new ArgumentException("A validated canonical sparse content key is required.", nameof(type));
+            throw new ArgumentException("A validated canonical sparse namespaced content ID is required.", nameof(type));
         }
 
         if (payload.Length > LogicalSparseRecord.MaxPayloadBytes)
@@ -102,28 +102,27 @@ public readonly record struct LogicalSparseInput
         Payload = [.. payload.Span];
     }
 
-    private LogicalSparseInput(int localIndex, ContentKey type, ImmutableArray<byte> payload)
+    private LogicalSparseInput(LocalIndex localIndex, NamespacedContentId type, ImmutableArray<byte> payload)
     {
         LocalIndex = localIndex;
         Type = type;
         Payload = payload;
     }
 
-    /// <summary>Gets the nonnegative local index supplied by the caller.</summary>
-    public int LocalIndex { get; }
+    /// <summary>Gets the local index supplied by the caller.</summary>
+    public LocalIndex LocalIndex { get; }
 
     /// <summary>Gets the canonical content type supplied by the caller.</summary>
-    public ContentKey Type { get; }
+    public NamespacedContentId Type { get; }
 
     /// <summary>Gets the deep-copied opaque sparse payload.</summary>
     public ImmutableArray<byte> Payload { get; }
 
-    internal static LogicalSparseInput FromEncoded(int localIndex, ContentKey type, ReadOnlySpan<byte> payload)
+    internal static LogicalSparseInput FromEncoded(LocalIndex localIndex, NamespacedContentId type, ReadOnlySpan<byte> payload)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(localIndex);
-        ContentKey validatedType = type.IsValid
+        NamespacedContentId validatedType = type.IsValid
             ? type
-            : throw new ArgumentException("A validated canonical sparse content key is required.", nameof(type));
+            : throw new ArgumentException("A validated canonical sparse namespaced content ID is required.", nameof(type));
 
         return payload.Length <= LogicalSparseRecord.MaxPayloadBytes
             ? new LogicalSparseInput(localIndex, validatedType, [.. payload])
@@ -134,7 +133,7 @@ public readonly record struct LogicalSparseInput
 
     internal void ThrowIfInvalid()
     {
-        if (LocalIndex < 0 || !Type.IsValid || Payload.IsDefault || Payload.Length > LogicalSparseRecord.MaxPayloadBytes)
+        if (!Type.IsValid || Payload.IsDefault || Payload.Length > LogicalSparseRecord.MaxPayloadBytes)
         {
             throw new InvalidOperationException("LogicalSparseInput is uninitialized or invalid.");
         }

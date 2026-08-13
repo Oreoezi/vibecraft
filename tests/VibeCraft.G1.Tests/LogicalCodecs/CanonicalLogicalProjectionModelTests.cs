@@ -34,15 +34,15 @@ public sealed class CanonicalLogicalProjectionModelTests
     public void PaletteIsAscendingRegardlessOfForwardOrReverseContainerDiscovery()
     {
         SectionGeometry geometry = SectionGeometry.Side16;
-        WorldStateId[] semantic = CreateStates(geometry, 0);
-        semantic[geometry.GetLinearIndex(geometry.CreateLocal(1, 0, 0))] = new WorldStateId(7);
-        semantic[geometry.GetLinearIndex(geometry.CreateLocal(2, 0, 0))] = new WorldStateId(2);
-        semantic[geometry.GetLinearIndex(geometry.CreateLocal(3, 0, 0))] = new WorldStateId(7);
+        BlockStateId[] semantic = CreateStates(geometry, 0);
+        semantic[geometry.GetLocalIndex(geometry.CreateLocal(1, 0, 0)).Value] = new BlockStateId(7);
+        semantic[geometry.GetLocalIndex(geometry.CreateLocal(2, 0, 0)).Value] = new BlockStateId(2);
+        semantic[geometry.GetLocalIndex(geometry.CreateLocal(3, 0, 0)).Value] = new BlockStateId(7);
 
         MutableSectionBlockStates forward = CreateWithHistory(geometry, semantic, Enumerable.Range(0, semantic.Length));
         MutableSectionBlockStates reverse = CreateWithHistory(geometry, semantic, Enumerable.Range(0, semantic.Length).Reverse());
-        WorldStateId[] forwardStates = CopySnapshot(forward);
-        WorldStateId[] reverseStates = CopySnapshot(reverse);
+        BlockStateId[] forwardStates = CopySnapshot(forward);
+        BlockStateId[] reverseStates = CopySnapshot(reverse);
 
         CanonicalLogicalProjection fromForward = CanonicalLogicalProjection.Create(
             CreateMap(0, 2, 7),
@@ -57,7 +57,7 @@ public sealed class CanonicalLogicalProjectionModelTests
     }
 
     [Fact]
-    public void MappingBindingsRemainAscendingAndPreserveWorldStateIdGaps()
+    public void MappingBindingsRemainAscendingAndPreserveBlockStateIdGaps()
     {
         WorldStateMap mapping = CreateMap(0, 2, 11, 4096);
         CanonicalLogicalProjection projection = CanonicalLogicalProjection.Create(
@@ -93,9 +93,9 @@ public sealed class CanonicalLogicalProjectionModelTests
 
         Assert.Collection(
             section.SparseRecords,
-            record => Assert.Equal(2, record.LocalIndex),
-            record => Assert.Equal(9, record.LocalIndex),
-            record => Assert.Equal(17, record.LocalIndex));
+            record => Assert.Equal(new LocalIndex(2), record.LocalIndex),
+            record => Assert.Equal(new LocalIndex(9), record.LocalIndex),
+            record => Assert.Equal(new LocalIndex(17), record.LocalIndex));
         Assert.Equal(new ulong[] { 2, 3, 4, 5, 7 }, section.ScheduledTicks.Select(tick => tick.Sequence));
         LogicalScheduledTickQueueKind[] expectedQueues =
         [
@@ -158,14 +158,14 @@ public sealed class CanonicalLogicalProjectionModelTests
             CreateStates(geometry, 0)));
         _ = Assert.Throws<ArgumentException>(() => new LogicalSectionInput(Key(9), geometry, CreateStates(geometry, 0).Take(geometry.Side.Value)));
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => Sparse(0, new byte[LogicalSparseRecord.MaxPayloadBytes + 1]));
-        _ = Assert.Throws<ArgumentException>(() => new LogicalSparseInput(0, default, Array.Empty<byte>()));
+        _ = Assert.Throws<ArgumentException>(() => new LogicalSparseInput(default, default, Array.Empty<byte>()));
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => new LogicalScheduledTick(
             LogicalScheduledTickQueueKind.Block,
             WorldTick.Initial,
             LogicalScheduledTick.MaximumPriority + 1,
-            0,
-            0,
-            ContentKey.Parse("test:type")));
+            default,
+            default,
+            NamespacedContentId.Parse("test:type")));
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => new LogicalSectionInput(
             Key(9),
             geometry,
@@ -216,8 +216,8 @@ public sealed class CanonicalLogicalProjectionModelTests
             WorldTick.Initial,
             0,
             0,
-            0,
-            ContentKey.Parse("test:type")));
+            default,
+            NamespacedContentId.Parse("test:type")));
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => new LogicalSectionInput(
             Key(13),
             geometry,
@@ -243,13 +243,13 @@ public sealed class CanonicalLogicalProjectionModelTests
     public void InputCollectionsAndPayloadsAreDeepCopiedWithoutAliasing()
     {
         SectionGeometry geometry = SectionGeometry.Side16;
-        WorldStateId[] states = CreateStates(geometry, 0, 2);
+        BlockStateId[] states = CreateStates(geometry, 0, 2);
         byte[] payload = [1, 2, 3];
         List<LogicalSparseInput> sparse = [Sparse(4, payload, "chest")];
         List<LogicalScheduledTick> scheduled = [Tick(LogicalScheduledTickQueueKind.Block, 5, 0, 1, 5, "crop")];
         LogicalSectionInput input = CreateInput(Key(11), geometry, states, sparse, scheduled);
 
-        states[0] = new WorldStateId(2);
+        states[0] = new BlockStateId(2);
         payload[0] = 99;
         sparse.Clear();
         scheduled.Clear();
@@ -257,8 +257,8 @@ public sealed class CanonicalLogicalProjectionModelTests
         CanonicalLogicalProjection projection = CanonicalLogicalProjection.Create(CreateMap(0, 2), [input]);
         LogicalSectionRecord section = projection.Sections[0];
 
-        Assert.Equal(new WorldStateId(0), section.States[0]);
-        Assert.Equal(ContentKey.Create("test", "chest"), section.SparseRecords[0].Type);
+        Assert.Equal(new BlockStateId(0), section.States[0]);
+        Assert.Equal(NamespacedContentId.Create("test", "chest"), section.SparseRecords[0].Type);
         Assert.Equal(new byte[] { 1, 2, 3 }, section.SparseRecords[0].Payload);
         _ = Assert.Single(section.SparseRecords);
         _ = Assert.Single(section.ScheduledTicks);
@@ -270,7 +270,7 @@ public sealed class CanonicalLogicalProjectionModelTests
     public void ExactXContiguousZYIndexingIsPreservedForBothSectionSides(int side)
     {
         SectionGeometry geometry = new(new SectionSide(side));
-        WorldStateId[] states = CreateStates(geometry, 0);
+        BlockStateId[] states = CreateStates(geometry, 0);
         (LocalBlock Local, uint State)[] writes =
         [
             (geometry.CreateLocal(0, 0, 0), 1),
@@ -281,7 +281,7 @@ public sealed class CanonicalLogicalProjectionModelTests
         ];
         foreach ((LocalBlock local, uint state) in writes)
         {
-            states[geometry.GetLinearIndex(local)] = new WorldStateId(state);
+            states[geometry.GetLocalIndex(local).Value] = new BlockStateId(state);
         }
 
         LogicalSectionRecord section = CanonicalLogicalProjection.Create(
@@ -291,9 +291,9 @@ public sealed class CanonicalLogicalProjectionModelTests
         foreach ((LocalBlock local, uint state) in writes)
         {
             int expectedIndex = local.X + (side * (local.Z + (side * local.Y)));
-            Assert.Equal(expectedIndex, geometry.GetLinearIndex(local));
-            Assert.Equal(new WorldStateId(state), section.GetState(local));
-            Assert.Equal(new WorldStateId(state), section.Palette[section.PaletteIndices[expectedIndex]]);
+            Assert.Equal(new LocalIndex(expectedIndex), geometry.GetLocalIndex(local));
+            Assert.Equal(new BlockStateId(state), section.GetState(local));
+            Assert.Equal(new BlockStateId(state), section.Palette[section.PaletteIndices[expectedIndex]]);
         }
     }
 
@@ -301,15 +301,15 @@ public sealed class CanonicalLogicalProjectionModelTests
     public void SnapshotsWithDifferentContainerHistoriesProjectToIdenticalSemanticRecords()
     {
         SectionGeometry geometry = SectionGeometry.Side16;
-        WorldStateId[] semantic = CreateStates(geometry, 0);
-        semantic[1] = new WorldStateId(7);
-        semantic[50] = new WorldStateId(2);
-        semantic[^1] = new WorldStateId(7);
+        BlockStateId[] semantic = CreateStates(geometry, 0);
+        semantic[1] = new BlockStateId(7);
+        semantic[50] = new BlockStateId(2);
+        semantic[^1] = new BlockStateId(7);
 
         MutableSectionBlockStates forward = CreateWithHistory(geometry, semantic, Enumerable.Range(0, semantic.Length));
         MutableSectionBlockStates reverse = CreateWithHistory(geometry, semantic, Enumerable.Range(0, semantic.Length).Reverse());
-        WorldStateId[] copiedForward = CopySnapshot(forward);
-        WorldStateId[] copiedReverse = CopySnapshot(reverse);
+        BlockStateId[] copiedForward = CopySnapshot(forward);
+        BlockStateId[] copiedReverse = CopySnapshot(reverse);
 
         CanonicalLogicalProjection forwardProjection = CanonicalLogicalProjection.Create(
             CreateMap(0, 2, 7),
@@ -326,7 +326,7 @@ public sealed class CanonicalLogicalProjectionModelTests
     private static LogicalSectionInput CreateInput(
         LogicalRecordKey key,
         SectionGeometry geometry,
-        IEnumerable<WorldStateId> states,
+        IEnumerable<BlockStateId> states,
         IEnumerable<LogicalSparseInput>? sparse = null,
         IEnumerable<LogicalScheduledTick>? scheduled = null)
     {
@@ -351,13 +351,13 @@ public sealed class CanonicalLogicalProjectionModelTests
             new WorldTick(dueTick),
             priority,
             sequence,
-            localIndex,
-            ContentKey.Create("test", expectedType));
+            new LocalIndex(localIndex),
+            NamespacedContentId.Create("test", expectedType));
     }
 
     private static LogicalSparseInput Sparse(int localIndex, ReadOnlyMemory<byte> payload = default, string type = "fixture")
     {
-        return new LogicalSparseInput(localIndex, ContentKey.Create("test", type), payload);
+        return new LogicalSparseInput(new LocalIndex(localIndex), NamespacedContentId.Create("test", type), payload);
     }
 
     private static WorldStateMap CreateMap(params uint[] ids)
@@ -368,7 +368,7 @@ public sealed class CanonicalLogicalProjectionModelTests
                 .Append(0U)
                 .Distinct()
                 .OrderBy(id => id)
-                .Select(id => new WorldStateBinding(new WorldStateId(id), CreateState(id))),
+                .Select(id => new WorldStateBinding(new BlockStateId(id), CreateState(id))),
         ]);
     }
 
@@ -376,23 +376,23 @@ public sealed class CanonicalLogicalProjectionModelTests
     {
         return id == 0
             ? CanonicalBlockState.Air
-            : new CanonicalBlockState(ContentKey.Create("test", $"state-{id}"), []);
+            : new CanonicalBlockState(NamespacedContentId.Create("test", $"state-{id}"), []);
     }
 
-    private static WorldStateId[] CreateStates(SectionGeometry geometry, params uint[] pattern)
+    private static BlockStateId[] CreateStates(SectionGeometry geometry, params uint[] pattern)
     {
         ArgumentOutOfRangeException.ThrowIfZero(pattern.Length);
         int side = geometry.Side.Value;
         return
         [
             .. Enumerable.Range(0, checked(side * side * side))
-                .Select(index => new WorldStateId(pattern[index % pattern.Length])),
+                .Select(index => new BlockStateId(pattern[index % pattern.Length])),
         ];
     }
 
     private static MutableSectionBlockStates CreateWithHistory(
         SectionGeometry geometry,
-        WorldStateId[] semantic,
+        BlockStateId[] semantic,
         IEnumerable<int> writeOrder)
     {
         MutableSectionBlockStates section = new(geometry, semantic[0], default);
@@ -403,16 +403,16 @@ public sealed class CanonicalLogicalProjectionModelTests
                 continue;
             }
 
-            Assert.Equal(SectionWriteResult.Changed, section.TrySet(SectionCandidateFixture.ToLocal(index, geometry.Side.Value), semantic[index]));
+            Assert.Equal(SectionWriteResult.Changed, section.TrySet(SectionCandidateFixture.ToLocal(new LocalIndex(index), geometry), semantic[index]));
         }
 
         return section;
     }
 
-    private static WorldStateId[] CopySnapshot(MutableSectionBlockStates section)
+    private static BlockStateId[] CopySnapshot(MutableSectionBlockStates section)
     {
         SectionBlockStateSnapshot snapshot = section.CaptureSnapshot();
-        WorldStateId[] states = new WorldStateId[snapshot.Count];
+        BlockStateId[] states = new BlockStateId[snapshot.Count];
         snapshot.CopyTo(states);
         return states;
     }

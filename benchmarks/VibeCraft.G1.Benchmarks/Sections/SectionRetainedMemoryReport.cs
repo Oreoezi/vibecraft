@@ -197,7 +197,7 @@ internal static class SectionRetainedMemoryReport
         for (int cubeIndex = 0; cubeIndex < cubeCount; cubeIndex++)
         {
             ulong cubeSeed = unchecked(seed + ((ulong)cubeIndex * 0x9E3779B97F4A7C15UL));
-            WorldStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(fixture, cubeSeed);
+            BlockStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(fixture, cubeSeed);
             checksum = unchecked((checksum * 31UL) ^ SectionBenchmarkSupport.Checksum(canonical));
             if (mode == RetainedMemoryMode.DenseCanonical)
             {

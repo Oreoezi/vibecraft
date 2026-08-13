@@ -7,9 +7,9 @@ namespace VibeCraft.Content;
 /// <summary>Identifies one validated, extensible typed registry domain.</summary>
 public readonly struct ContentRegistryId : IEquatable<ContentRegistryId>
 {
-    private readonly ContentKey identity;
+    private readonly NamespacedContentId identity;
 
-    private ContentRegistryId(ContentKey identity)
+    private ContentRegistryId(NamespacedContentId identity)
     {
         this.identity = identity;
     }
@@ -66,7 +66,7 @@ public readonly struct ContentRegistryId : IEquatable<ContentRegistryId>
     public bool IsValid => identity.IsValid;
 
     /// <summary>Creates an extensible registry identity from a validated namespaced key.</summary>
-    public static ContentRegistryId Create(ContentKey identity)
+    public static ContentRegistryId Create(NamespacedContentId identity)
     {
         identity.ThrowIfInvalid();
         return new ContentRegistryId(identity);
@@ -75,7 +75,7 @@ public readonly struct ContentRegistryId : IEquatable<ContentRegistryId>
     /// <summary>Parses an extensible registry identity from a canonical namespaced key.</summary>
     public static ContentRegistryId Parse(string value)
     {
-        return Create(ContentKey.Parse(value));
+        return Create(NamespacedContentId.Parse(value));
     }
 
     /// <inheritdoc />
@@ -133,7 +133,7 @@ public sealed class ContentFingerprintEntry
 
     private ContentFingerprintEntry(
         ContentRegistryId registry,
-        ContentKey key,
+        NamespacedContentId key,
         string canonicalDefinition)
     {
         Registry = registry;
@@ -145,7 +145,7 @@ public sealed class ContentFingerprintEntry
     public ContentRegistryId Registry { get; }
 
     /// <summary>Gets the validated provider or definition key.</summary>
-    public ContentKey Key { get; }
+    public NamespacedContentId Key { get; }
 
     /// <summary>Gets the validated canonical definition text.</summary>
     public string CanonicalDefinition { get; }
@@ -153,7 +153,7 @@ public sealed class ContentFingerprintEntry
     /// <summary>Validates a fingerprint entry.</summary>
     public static ContentFingerprintEntry Create(
         ContentRegistryId registry,
-        ContentKey key,
+        NamespacedContentId key,
         string canonicalDefinition)
     {
         ArgumentException.ThrowIfNullOrEmpty(canonicalDefinition);

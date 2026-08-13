@@ -61,13 +61,13 @@ public sealed class E1CoreDataReportTests
     {
         foreach (SectionGeometry geometry in new[] { SectionGeometry.Side16, SectionGeometry.Side32 })
         {
-            WorldStateId[] semantic = SectionCandidateFixture.CreateStates(
+            BlockStateId[] semantic = SectionCandidateFixture.CreateStates(
                 geometry,
                 SectionFixtureKind.PaletteBoundary,
                 paletteSize: paletteSize);
             MutableSectionBlockStates adaptive = SectionCandidateFixture.CreateSection(geometry, semantic);
             SectionBlockStateSnapshot snapshot = adaptive.CaptureSnapshot();
-            WorldStateId[] copied = new WorldStateId[semantic.Length];
+            BlockStateId[] copied = new BlockStateId[semantic.Length];
             snapshot.CopyTo(copied);
 
             Assert.Equal(paletteSize, copied.Distinct().Count());
@@ -106,12 +106,12 @@ public sealed class E1CoreDataReportTests
                 {
                     LocalBlock local = geometry.CreateLocal(x, y, z);
                     int expected = x + (side * (z + (side * y)));
-                    int actual = geometry.GetLinearIndex(local);
+                    LocalIndex actual = geometry.GetLocalIndex(local);
 
-                    Assert.Equal(expected, actual);
-                    Assert.False(seen[actual]);
-                    seen[actual] = true;
-                    Assert.Equal(local, SectionCandidateFixture.ToLocal(actual, side));
+                    Assert.Equal(new LocalIndex(expected), actual);
+                    Assert.False(seen[actual.Value]);
+                    seen[actual.Value] = true;
+                    Assert.Equal(local, SectionCandidateFixture.ToLocal(actual, geometry));
                     visited++;
                 }
             }
@@ -124,9 +124,9 @@ public sealed class E1CoreDataReportTests
     [Fact]
     public void EightSide16SnapshotsReassembleTheOneSide32SemanticCube()
     {
-        WorldStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(SectionFixtureKind.Mixed, Seed);
+        BlockStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(SectionFixtureKind.Mixed, Seed);
         MutableSectionBlockStates[] sections = SectionEqualVolumeFixture.CreateSections(SectionEqualVolumeLayout.EightSide16, canonical);
-        WorldStateId[] reconstructed = CopyLayout(sections, SectionEqualVolumeLayout.EightSide16);
+        BlockStateId[] reconstructed = CopyLayout(sections, SectionEqualVolumeLayout.EightSide16);
 
         Assert.Equal(canonical, reconstructed);
 
@@ -139,7 +139,7 @@ public sealed class E1CoreDataReportTests
     [Fact]
     public void SnapshotCreationComparisonConsumesPerSnapshotMetadataWhileSemanticChecksRemainSeparate()
     {
-        WorldStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(SectionFixtureKind.Mixed, Seed);
+        BlockStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(SectionFixtureKind.Mixed, Seed);
         MutableSectionBlockStates[] oneSide32 = SectionEqualVolumeFixture.CreateSections(SectionEqualVolumeLayout.OneSide32, canonical);
         MutableSectionBlockStates[] eightSide16 = SectionEqualVolumeFixture.CreateSections(SectionEqualVolumeLayout.EightSide16, canonical);
 
@@ -167,11 +167,11 @@ public sealed class E1CoreDataReportTests
     public void SemanticFingerprintIsRepresentationIndependentAndPinned(int ordinal, string expectedHash)
     {
         (SectionFixtureKind kind, ulong cubeSeed) = GetCorpusEntry(ordinal);
-        WorldStateId[] dense = SectionEqualVolumeFixture.CreateCanonicalCube(kind, cubeSeed);
+        BlockStateId[] dense = SectionEqualVolumeFixture.CreateCanonicalCube(kind, cubeSeed);
         MutableSectionBlockStates[] oneSide32 = SectionEqualVolumeFixture.CreateSections(SectionEqualVolumeLayout.OneSide32, dense);
         MutableSectionBlockStates[] eightSide16 = SectionEqualVolumeFixture.CreateSections(SectionEqualVolumeLayout.EightSide16, dense);
-        WorldStateId[] copied32 = CopyLayout(oneSide32, SectionEqualVolumeLayout.OneSide32);
-        WorldStateId[] copied16 = CopyLayout(eightSide16, SectionEqualVolumeLayout.EightSide16);
+        BlockStateId[] copied32 = CopyLayout(oneSide32, SectionEqualVolumeLayout.OneSide32);
+        BlockStateId[] copied16 = CopyLayout(eightSide16, SectionEqualVolumeLayout.EightSide16);
 
         string denseHash = ComputeSemanticFingerprint(ordinal, kind, dense);
         Assert.Equal(dense, copied32);
@@ -185,7 +185,7 @@ public sealed class E1CoreDataReportTests
     public void LogicalProjectionIsDeterministicForEquivalentHistoryAndRoundTripsPerLayout()
     {
         (_, ulong cubeSeed) = GetCorpusEntry(2);
-        WorldStateId[] semantic = SectionEqualVolumeFixture.CreateCanonicalCube(SectionFixtureKind.Mixed, cubeSeed);
+        BlockStateId[] semantic = SectionEqualVolumeFixture.CreateCanonicalCube(SectionFixtureKind.Mixed, cubeSeed);
         WorldStateMap map = CreateMap(semantic);
         MutableSectionBlockStates[] oneSide32 = SectionEqualVolumeFixture.CreateSections(SectionEqualVolumeLayout.OneSide32, semantic);
         MutableSectionBlockStates[] eightSide16 = SectionEqualVolumeFixture.CreateSections(SectionEqualVolumeLayout.EightSide16, semantic);
@@ -216,7 +216,7 @@ public sealed class E1CoreDataReportTests
     public void WarmedSteadyRandomAndLinearAdaptiveReadsAllocateZeroBytes(int layoutValue, bool random)
     {
         SectionEqualVolumeLayout layout = (SectionEqualVolumeLayout)layoutValue;
-        WorldStateId[] semantic = SectionEqualVolumeFixture.CreateCanonicalCube(SectionFixtureKind.Mixed, Seed);
+        BlockStateId[] semantic = SectionEqualVolumeFixture.CreateCanonicalCube(SectionFixtureKind.Mixed, Seed);
         MutableSectionBlockStates[] sections = SectionEqualVolumeFixture.CreateSections(layout, semantic);
         int[] trace = CreateReadTrace(random);
         ulong checksum = 0;
@@ -242,7 +242,7 @@ public sealed class E1CoreDataReportTests
     [InlineData((int)SectionEditTraceKind.BoundaryClusters)]
     public void FixedReadAndEditTracesAreDeterministicWithProtocolShapes(int traceKindValue)
     {
-        WorldStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(SectionFixtureKind.Mixed, Seed);
+        BlockStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(SectionFixtureKind.Mixed, Seed);
         int[] linear = CreateReadTrace(random: false);
         int[] random = CreateReadTrace(random: true);
         SectionEditTraceKind traceKind = (SectionEditTraceKind)traceKindValue;
@@ -292,9 +292,9 @@ public sealed class E1CoreDataReportTests
         ];
     }
 
-    private static WorldStateId[] CopyLayout(MutableSectionBlockStates[] sections, SectionEqualVolumeLayout layout)
+    private static BlockStateId[] CopyLayout(MutableSectionBlockStates[] sections, SectionEqualVolumeLayout layout)
     {
-        WorldStateId[] copied = new WorldStateId[SectionEqualVolumeFixture.CubeVolume];
+        BlockStateId[] copied = new BlockStateId[SectionEqualVolumeFixture.CubeVolume];
         SectionEqualVolumeFixture.CopyToCanonical(sections, layout, copied, CreateSide16Scratch());
         return copied;
     }
@@ -310,7 +310,7 @@ public sealed class E1CoreDataReportTests
         {
             SectionEqualVolumeFixture.GetSectionCoordinates(layout, sectionIndex, out int x, out int y, out int z);
             SectionBlockStateSnapshot snapshot = sections[sectionIndex].CaptureSnapshot();
-            WorldStateId[] semantic = new WorldStateId[snapshot.Count];
+            BlockStateId[] semantic = new BlockStateId[snapshot.Count];
             snapshot.CopyTo(semantic);
             inputs[sectionIndex] = new LogicalSectionInput(
                 SectionKey(0, x, y, z),
@@ -331,20 +331,20 @@ public sealed class E1CoreDataReportTests
         return new LogicalRecordKey(LogicalRecordKind.SectionState, new DimensionId(dimension), new SectionCoord(x, y, z));
     }
 
-    private static WorldStateMap CreateMap(ReadOnlySpan<WorldStateId> states)
+    private static WorldStateMap CreateMap(ReadOnlySpan<BlockStateId> states)
     {
         HashSet<uint> ids = [0U];
-        foreach (WorldStateId state in states)
+        foreach (BlockStateId state in states)
         {
             _ = ids.Add(state.Value);
         }
 
         return WorldStateMap.Restore(ids.OrderBy(id => id).Select(id => new WorldStateBinding(
-            new WorldStateId(id),
-            id == 0 ? CanonicalBlockState.Air : new CanonicalBlockState(ContentKey.Create("fixture", $"state-{id}"), []))));
+            new BlockStateId(id),
+            id == 0 ? CanonicalBlockState.Air : new CanonicalBlockState(NamespacedContentId.Create("fixture", $"state-{id}"), []))));
     }
 
-    private static string ComputeSemanticFingerprint(int ordinal, SectionFixtureKind kind, ReadOnlySpan<WorldStateId> states)
+    private static string ComputeSemanticFingerprint(int ordinal, SectionFixtureKind kind, ReadOnlySpan<BlockStateId> states)
     {
         Assert.Equal(SectionEqualVolumeFixture.CubeVolume, states.Length);
         byte[] fixedFields = new byte[sizeof(ulong) + sizeof(uint) + sizeof(byte)];
@@ -359,7 +359,7 @@ public sealed class E1CoreDataReportTests
         hash.AppendData([0]);
         hash.AppendData(fixedFields);
         Span<byte> encodedState = stackalloc byte[sizeof(uint)];
-        foreach (WorldStateId state in states)
+        foreach (BlockStateId state in states)
         {
             BinaryPrimitives.WriteUInt32LittleEndian(encodedState, state.Value);
             hash.AppendData(encodedState);
@@ -413,8 +413,8 @@ public sealed class E1CoreDataReportTests
         return checksum;
     }
 
-    private static WorldStateId[][] CreateSide16Scratch()
+    private static BlockStateId[][] CreateSide16Scratch()
     {
-        return [.. Enumerable.Range(0, 8).Select(_ => new WorldStateId[16 * 16 * 16])];
+        return [.. Enumerable.Range(0, 8).Select(_ => new BlockStateId[16 * 16 * 16])];
     }
 }

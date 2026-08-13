@@ -6,13 +6,13 @@ namespace VibeCraft.G1.Tests.Content;
 public sealed class BlockStateIdentityTests
 {
     [Fact]
-    public void StatePropertiesAreSortedByOrdinalContentKey()
+    public void StatePropertiesAreSortedByOrdinalNamespacedContentId()
     {
         CanonicalBlockState state = new(
-            ContentKey.Parse("vibecraft:oak_log"),
+            NamespacedContentId.Parse("vibecraft:oak_log"),
             [
-                BlockStateProperty.Create(ContentKey.Parse("vibecraft:waterlogged"), "false"),
-                BlockStateProperty.Create(ContentKey.Parse("vibecraft:axis"), "y"),
+                BlockStateProperty.Create(NamespacedContentId.Parse("vibecraft:waterlogged"), "false"),
+                BlockStateProperty.Create(NamespacedContentId.Parse("vibecraft:axis"), "y"),
             ]);
 
         Assert.Equal(
@@ -24,28 +24,36 @@ public sealed class BlockStateIdentityTests
     [Fact]
     public void DuplicatePropertiesAndVariantAirAreRejected()
     {
-        ContentKey axis = ContentKey.Parse("vibecraft:axis");
+        NamespacedContentId axis = NamespacedContentId.Parse("vibecraft:axis");
 
         _ = Assert.Throws<ArgumentException>(() => new CanonicalBlockState(
-            ContentKey.Parse("vibecraft:oak_log"),
+            NamespacedContentId.Parse("vibecraft:oak_log"),
             [BlockStateProperty.Create(axis, "x"), BlockStateProperty.Create(axis, "y")]));
         _ = Assert.Throws<ArgumentException>(() => new CanonicalBlockState(
-            ContentKey.Parse("vibecraft:air"),
+            NamespacedContentId.Parse("vibecraft:air"),
             [BlockStateProperty.Create(axis, "x")]));
     }
 
     [Fact]
     public void StateIdDomainsHaveNoImplicitConversionOperators()
     {
-        Type[] domains = [typeof(WorldStateId), typeof(RuntimeStateId), typeof(SessionStateId)];
+        Type[] domains = [typeof(BlockStateId), typeof(RuntimeStateId), typeof(SessionStateId)];
 
         foreach (Type domain in domains)
         {
             Assert.DoesNotContain(domain.GetMethods(), method => method.Name is "op_Implicit" or "op_Explicit");
         }
 
-        Assert.NotEqual(typeof(WorldStateId), typeof(RuntimeStateId));
+        Assert.NotEqual(typeof(BlockStateId), typeof(RuntimeStateId));
         Assert.NotEqual(typeof(RuntimeStateId), typeof(SessionStateId));
+    }
+
+    [Fact]
+    public void BlockStateIdPreservesTheFullUnsignedDomain()
+    {
+        Assert.Equal(uint.MinValue, default(BlockStateId).Value);
+        Assert.Equal(uint.MaxValue, new BlockStateId(uint.MaxValue).Value);
+        Assert.NotEqual(default, new BlockStateId(uint.MaxValue));
     }
 
     [Fact]
@@ -54,17 +62,17 @@ public sealed class BlockStateIdentityTests
         BlockStateProperty invalid = default;
 
         Assert.False(invalid.IsValid);
-        _ = Assert.Throws<ArgumentException>(() => new CanonicalBlockState(ContentKey.Parse("vibecraft:stone"), [invalid]));
+        _ = Assert.Throws<ArgumentException>(() => new CanonicalBlockState(NamespacedContentId.Parse("vibecraft:stone"), [invalid]));
     }
 
     [Fact]
     public void PropertyLimitStopsEnumerationAtPropertyThirtyThreeBeforeSorting()
     {
         int yielded = 0;
-        ContentKey propertyKey = ContentKey.Parse("vibecraft:property");
+        NamespacedContentId propertyKey = NamespacedContentId.Parse("vibecraft:property");
 
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => new CanonicalBlockState(
-            ContentKey.Parse("vibecraft:bounded"),
+            NamespacedContentId.Parse("vibecraft:bounded"),
             InfiniteProperties()));
         Assert.Equal(CanonicalBlockState.MaxProperties + 1, yielded);
 

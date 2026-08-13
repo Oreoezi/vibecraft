@@ -8,11 +8,11 @@ namespace VibeCraft.G1.Benchmarks.Sections;
 [BenchmarkCategory(SectionCandidateFixture.FixtureId)]
 public class EqualVolumeSectionReadBenchmarks
 {
-    private WorldStateId[] _canonical = null!;
+    private BlockStateId[] _canonical = null!;
     private SectionEqualVolumeLayout _layout;
     private IReadOnlySectionBlockStates[] _sections = null!;
-    private WorldStateId[] _projection = null!;
-    private WorldStateId[][] _side16Scratch = null!;
+    private BlockStateId[] _projection = null!;
+    private BlockStateId[][] _side16Scratch = null!;
     private int[] _randomTrace = null!;
 
     [Params("OneSide32", "EightSide16")]
@@ -31,7 +31,7 @@ public class EqualVolumeSectionReadBenchmarks
         _sections = SectionEqualVolumeFixture.CreateSections(_layout, _canonical);
         SectionEqualVolumeFixture.ValidateSections(_sections, _layout);
         SectionBenchmarkSupport.ValidateEqualWorld(_sections, _layout, _canonical);
-        _projection = new WorldStateId[_canonical.Length];
+        _projection = new BlockStateId[_canonical.Length];
         _side16Scratch = SectionBenchmarkSupport.CreateSide16Scratch();
         SectionEqualVolumeFixture.CopyToCanonical(_sections, _layout, _projection, _side16Scratch);
         _randomTrace = SectionBenchmarkSupport.CreateRandomTrace(
@@ -113,8 +113,8 @@ public class EqualVolumeSectionReadBenchmarks
 [BenchmarkCategory(SectionCandidateFixture.FixtureId, "EqualVolumeEdits")]
 public class EqualVolumeSectionEditBenchmarks
 {
-    private WorldStateId[] _canonical = null!;
-    private WorldStateId[] _denseCandidate = null!;
+    private BlockStateId[] _canonical = null!;
+    private BlockStateId[] _denseCandidate = null!;
     private SectionEqualVolumeLayout _layout;
     private MutableSectionBlockStates[] _adaptiveCandidate = null!;
     private SectionEdit[] _trace = null!;
@@ -159,7 +159,7 @@ public class EqualVolumeSectionEditBenchmarks
     [IterationSetup(Target = nameof(DenseClusteredEdits))]
     public void SetupDense()
     {
-        _denseCandidate = (WorldStateId[])_canonical.Clone();
+        _denseCandidate = (BlockStateId[])_canonical.Clone();
     }
 
     [Benchmark]
@@ -190,7 +190,7 @@ public class EqualVolumeSectionEditBenchmarks
 
     private void ValidateTraceEquivalence()
     {
-        WorldStateId[] dense = (WorldStateId[])_canonical.Clone();
+        BlockStateId[] dense = (BlockStateId[])_canonical.Clone();
         MutableSectionBlockStates[] adaptive = SectionEqualVolumeFixture.CreateSections(_layout, _canonical);
         foreach (SectionEdit edit in _trace)
         {
@@ -205,7 +205,7 @@ public class EqualVolumeSectionEditBenchmarks
         SectionBenchmarkSupport.ValidateEqualWorld(adaptive, _layout, dense);
     }
 
-    private static SectionWriteResult SetDenseUnchecked(Span<WorldStateId> dense, SectionEdit edit)
+    private static SectionWriteResult SetDenseUnchecked(Span<BlockStateId> dense, SectionEdit edit)
     {
         if (dense[edit.GlobalIndex].Equals(edit.State))
         {
@@ -233,7 +233,7 @@ public class EqualVolumePaletteGrowthBenchmarks
     {
         SectionBenchmarkSupport.EmitObservationManifestOnce(SectionCandidateFixture.DefaultSeed, "Release");
         _layout = SectionBenchmarkSupport.ParseLayout(Layout);
-        WorldStateId[] canonical = new WorldStateId[SectionEqualVolumeFixture.CubeVolume];
+        BlockStateId[] canonical = new BlockStateId[SectionEqualVolumeFixture.CubeVolume];
         MutableSectionBlockStates[] validationCandidate = SectionEqualVolumeFixture.CreateSections(_layout, canonical);
         SectionEqualVolumeFixture.ValidateSections(validationCandidate, _layout);
         SectionBenchmarkSupport.ValidateEqualWorld(validationCandidate, _layout, canonical);
@@ -242,7 +242,7 @@ public class EqualVolumePaletteGrowthBenchmarks
         {
             _growthTrace[index] = new SectionEdit(
                 index * 127 % SectionEqualVolumeFixture.CubeVolume,
-                new WorldStateId(checked((uint)index + 1U)),
+                new BlockStateId(checked((uint)index + 1U)),
                 SectionEditIntent.NewStateChange);
         }
     }
@@ -252,7 +252,7 @@ public class EqualVolumePaletteGrowthBenchmarks
     {
         _candidate = SectionEqualVolumeFixture.CreateSections(
             _layout,
-            new WorldStateId[SectionEqualVolumeFixture.CubeVolume]);
+            new BlockStateId[SectionEqualVolumeFixture.CubeVolume]);
         SectionEqualVolumeFixture.ValidateSections(_candidate, _layout);
     }
 

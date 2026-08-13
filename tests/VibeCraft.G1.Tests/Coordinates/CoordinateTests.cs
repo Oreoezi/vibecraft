@@ -72,7 +72,7 @@ public sealed class CoordinateTests
 
         Assert.Equal(new BlockCoord(-2L * side, 3L * side, -4L * side), section.Origin(geometry));
         Assert.Equal(new BlockCoord(-side - 1, (4L * side) - 1, (-3L * side) - 1), section.EndInclusive(geometry));
-        Assert.Equal((side * side * side) - 1, geometry.GetLinearIndex(local));
+        Assert.Equal(new LocalIndex((side * side * side) - 1), geometry.GetLocalIndex(local));
         Assert.Equal(new BlockCoord((-2L * side) + side - 1, (3L * side) + side - 1, (-4L * side) + side - 1), geometry.ToBlockCoord(section, local));
     }
 
@@ -82,9 +82,9 @@ public sealed class CoordinateTests
     {
         SectionGeometry geometry = GeometryFor(side);
 
-        Assert.Equal(1, geometry.GetLinearIndex(geometry.CreateLocal(1, 0, 0)));
-        Assert.Equal(side, geometry.GetLinearIndex(geometry.CreateLocal(0, 0, 1)));
-        Assert.Equal(side * side, geometry.GetLinearIndex(geometry.CreateLocal(0, 1, 0)));
+        Assert.Equal(new LocalIndex(1), geometry.GetLocalIndex(geometry.CreateLocal(1, 0, 0)));
+        Assert.Equal(new LocalIndex(side), geometry.GetLocalIndex(geometry.CreateLocal(0, 0, 1)));
+        Assert.Equal(new LocalIndex(side * side), geometry.GetLocalIndex(geometry.CreateLocal(0, 1, 0)));
     }
 
     [Theory]
@@ -102,16 +102,12 @@ public sealed class CoordinateTests
                 for (int x = 0; x < side; x++)
                 {
                     LocalBlock local = geometry.CreateLocal(x, y, z);
-                    int index = geometry.GetLinearIndex(local);
+                    LocalIndex index = geometry.GetLocalIndex(local);
 
-                    Assert.InRange(index, 0, sectionVolume - 1);
-                    Assert.False(seenIndices[index]);
-                    seenIndices[index] = true;
-
-                    int roundTripX = index % side;
-                    int roundTripZ = index / side % side;
-                    int roundTripY = index / (side * side);
-                    Assert.Equal(local, geometry.CreateLocal(roundTripX, roundTripY, roundTripZ));
+                    Assert.InRange(index.Value, 0, sectionVolume - 1);
+                    Assert.False(seenIndices[index.Value]);
+                    seenIndices[index.Value] = true;
+                    Assert.Equal(local, geometry.GetLocalBlock(index));
                 }
             }
         }
@@ -153,6 +149,34 @@ public sealed class CoordinateTests
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => SectionGeometry.Side16.ToBlockCoord(new SectionCoord(0, 0, 0), new LocalBlock(16, 0, 0)));
         Assert.Equal(new LocalBlock(31, 0, 0), SectionGeometry.Side32.CreateLocal(31, 0, 0));
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => default(SectionGeometry).Decompose(new BlockCoord(0, 0, 0)));
+    }
+
+    [Theory]
+    [MemberData(nameof(SectionSides))]
+    public void LocalIndexRejectsNegativeAndGeometryOutOfRangeValues(int side)
+    {
+        SectionGeometry geometry = GeometryFor(side);
+
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => new LocalIndex(-1));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => geometry.GetLocalBlock(new LocalIndex(geometry.Volume)));
+        Assert.Equal(0, geometry.GetLocalIndex(default).Value);
+        Assert.Equal(default, geometry.GetLocalBlock(default));
+    }
+
+    [Fact]
+    public void LocalIndexHasNumericOrderingWithoutIntegerConversions()
+    {
+        LocalIndex first = new(1);
+        LocalIndex second = new(2);
+
+        Assert.True(first < second);
+        Assert.True(first <= second);
+        Assert.True(second > first);
+        Assert.True(second >= first);
+        Assert.Equal(-1, Math.Sign(first.CompareTo(second)));
+        Assert.DoesNotContain(
+            typeof(LocalIndex).GetMethods(),
+            method => method.Name is "op_Implicit" or "op_Explicit");
     }
 
     [Fact]

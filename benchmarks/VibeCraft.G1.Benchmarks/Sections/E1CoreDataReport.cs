@@ -198,13 +198,13 @@ internal static class E1CoreDataReport
                 {
                     for (int x = 0; x < side; x++)
                     {
-                        int actual = geometry.GetLinearIndex(geometry.CreateLocal(x, y, z));
-                        if (actual != expected || actual < 0 || actual >= volume || seen[actual])
+                        LocalIndex actual = geometry.GetLocalIndex(geometry.CreateLocal(x, y, z));
+                        if (actual.Value != expected || actual.Value >= volume || seen[actual.Value])
                         {
                             throw new InvalidOperationException($"The X-to-Z-to-Y local-index contract is not bijective for side {side} at ({x}, {y}, {z}).");
                         }
 
-                        seen[actual] = true;
+                        seen[actual.Value] = true;
                         expected++;
                     }
                 }
@@ -226,7 +226,7 @@ internal static class E1CoreDataReport
             SectionFixtureKind.HighEntropy,
         })
         {
-            WorldStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(distribution, Seed);
+            BlockStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(distribution, Seed);
             int[] randomTrace = SectionBenchmarkSupport.CreateRandomTrace(
                 SectionBenchmarkSupport.RandomTraceLength,
                 CubeVolume,
@@ -418,7 +418,7 @@ internal static class E1CoreDataReport
             }
 
             SectionFixtureKind distribution = DistributionForOrdinal(ordinal);
-            WorldStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(distribution, CubeSeedFor(ordinal));
+            BlockStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(distribution, CubeSeedFor(ordinal));
             checksum = unchecked((checksum * 31UL) ^ SectionBenchmarkSupport.Checksum(canonical));
             if (mode == E1MemoryMode.DenseCanonical)
             {
@@ -620,7 +620,7 @@ internal static class E1CoreDataReport
         _ = text.AppendLine("**Disposition: defer.** The predeclared G0 owner acceptance for host, runtime, GC, power, and product budgets is absent; this report cannot freeze compatibility constants.").AppendLine();
         _ = text.Append("Fixture set: `").Append(G0FixtureId).Append("`, `").Append(SectionFixtureId).Append("`, `").Append(ProjectionFixtureId).Append("`; seed `0x").Append(Seed.ToString("X16", CultureInfo.InvariantCulture)).AppendLine("`.").AppendLine();
         _ = text.AppendLine("## Protocol").AppendLine();
-        _ = text.AppendLine("The corpus streams canonical 32-cubed semantic cubes. Ordinal modulo four selects homogeneous (alternating air/stone), layered, mixed, and high-entropy distributions. Every semantic fingerprint hashes the domain, fixture, seed, ordinal, distribution byte, and exactly 32,768 WorldStateId values in X-to-Z-to-Y order. One 32-cubed section and eight 16-cubed sections must match that semantic fingerprint; their logical-projection byte hashes are intentionally not required to match.").AppendLine();
+        _ = text.AppendLine("The corpus streams canonical 32-cubed semantic cubes. Ordinal modulo four selects homogeneous (alternating air/stone), layered, mixed, and high-entropy distributions. Every semantic fingerprint hashes the domain, fixture, seed, ordinal, distribution byte, and exactly 32,768 BlockStateId values in X-to-Z-to-Y order. One 32-cubed section and eight 16-cubed sections must match that semantic fingerprint; their logical-projection byte hashes are intentionally not required to match.").AppendLine();
         _ = text.Append("This profile fingerprints all ").Append(document.Run.CubeCount.ToString(CultureInfo.InvariantCulture))
             .Append(" corpus cubes and measures timing/amplification on ").Append(document.Run.CompletedPerformanceCubeCount.ToString(CultureInfo.InvariantCulture))
             .Append(" deterministic round-robin cubes. It applies ").Append(document.Run.EditClustersPerMeasuredCube.ToString(CultureInfo.InvariantCulture))
@@ -765,7 +765,7 @@ internal static class E1CoreDataReport
         {
             foreach (int boundary in PaletteBoundaries)
             {
-                WorldStateId[] canonical = SectionCandidateFixture.CreateStates(
+                BlockStateId[] canonical = SectionCandidateFixture.CreateStates(
                     SectionGeometry.Side32,
                     SectionFixtureKind.PaletteBoundary,
                     Seed,
@@ -807,7 +807,7 @@ internal static class E1CoreDataReport
                 }
 
                 SectionFixtureKind distribution = DistributionForOrdinal(ordinal);
-                WorldStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(distribution, CubeSeedFor(ordinal));
+                BlockStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(distribution, CubeSeedFor(ordinal));
                 WorldStateMap map = CreateWorldStateMap(canonical);
                 MutableSectionBlockStates[] one32 = SectionEqualVolumeFixture.CreateSections(SectionEqualVolumeLayout.OneSide32, canonical);
                 MutableSectionBlockStates[] eight16 = SectionEqualVolumeFixture.CreateSections(SectionEqualVolumeLayout.EightSide16, canonical);
@@ -930,7 +930,7 @@ internal static class E1CoreDataReport
         private void RunReadPairs(
             int ordinal,
             SectionFixtureKind distribution,
-            WorldStateId[] canonical,
+            BlockStateId[] canonical,
             MutableSectionBlockStates[] one32,
             MutableSectionBlockStates[] eight16,
             WorldStateMap map,
@@ -995,7 +995,7 @@ internal static class E1CoreDataReport
         private void RunEditPairs(
             int ordinal,
             SectionFixtureKind distribution,
-            WorldStateId[] canonical,
+            BlockStateId[] canonical,
             SectionEdit[] trace,
             SectionEditTraceKind traceKind,
             int roundStart,
@@ -1123,7 +1123,7 @@ internal static class E1CoreDataReport
         private void RecordAmplification(
             int ordinal,
             SectionFixtureKind distribution,
-            WorldStateId[] canonical,
+            BlockStateId[] canonical,
             SectionEdit[] trace,
             SectionEditTraceKind traceKind,
             SectionEqualVolumeLayout layout)
@@ -1143,7 +1143,7 @@ internal static class E1CoreDataReport
                     }
                 }
 
-                WorldStateId[] semantic = CopyCanonicalFromSnapshots(sections, layout);
+                BlockStateId[] semantic = CopyCanonicalFromSnapshots(sections, layout);
                 WorldStateMap map = CreateWorldStateMap(semantic);
                 ProjectionMeasurement projection = EncodeProjection(sections, layout, map, ordinal, dirtySections);
                 long grossHalo = 0;
@@ -1481,7 +1481,7 @@ internal static class E1CoreDataReport
         return CreateReadMeasurement(duration, allocated, timingChecksum, allocationChecksum);
     }
 
-    private static E1MeasuredOperation MeasureDenseRandomRead(WorldStateId[] states, int[] trace)
+    private static E1MeasuredOperation MeasureDenseRandomRead(BlockStateId[] states, int[] trace)
     {
         WarmRead(() => ReadDenseRandom(states, trace));
         long beforeTicks = Stopwatch.GetTimestamp();
@@ -1507,7 +1507,7 @@ internal static class E1CoreDataReport
         return CreateReadMeasurement(duration, allocated, timingChecksum, allocationChecksum);
     }
 
-    private static E1MeasuredOperation MeasureDenseLinearRead(WorldStateId[] states)
+    private static E1MeasuredOperation MeasureDenseLinearRead(BlockStateId[] states)
     {
         WarmRead(() => ReadDenseLinear(states));
         long beforeTicks = Stopwatch.GetTimestamp();
@@ -1556,7 +1556,7 @@ internal static class E1CoreDataReport
     }
 
     private static E1MeasuredOperation MeasureEdits(
-        WorldStateId[] canonical,
+        BlockStateId[] canonical,
         SectionEqualVolumeLayout layout,
         SectionEdit[] trace)
     {
@@ -1564,26 +1564,26 @@ internal static class E1CoreDataReport
         _ = ApplyEdits(warm, layout, trace);
         MutableSectionBlockStates[] candidate = SectionEqualVolumeFixture.CreateSections(layout, canonical);
         E1MeasuredOperation measurement = Measure(() => ApplyEdits(candidate, layout, trace));
-        WorldStateId[] actual = CopyCanonicalFromSnapshots(candidate, layout);
+        BlockStateId[] actual = CopyCanonicalFromSnapshots(candidate, layout);
         return VerifyAndIncludeEditedSemantics(measurement, canonical, trace, actual);
     }
 
-    private static E1MeasuredOperation MeasureDenseEdits(WorldStateId[] canonical, SectionEdit[] trace)
+    private static E1MeasuredOperation MeasureDenseEdits(BlockStateId[] canonical, SectionEdit[] trace)
     {
-        WorldStateId[] warm = (WorldStateId[])canonical.Clone();
+        BlockStateId[] warm = (BlockStateId[])canonical.Clone();
         _ = ApplyDenseEdits(warm, trace);
-        WorldStateId[] candidate = (WorldStateId[])canonical.Clone();
+        BlockStateId[] candidate = (BlockStateId[])canonical.Clone();
         E1MeasuredOperation measurement = Measure(() => ApplyDenseEdits(candidate, trace));
         return VerifyAndIncludeEditedSemantics(measurement, canonical, trace, candidate);
     }
 
     private static E1MeasuredOperation VerifyAndIncludeEditedSemantics(
         E1MeasuredOperation measurement,
-        WorldStateId[] canonical,
+        BlockStateId[] canonical,
         SectionEdit[] trace,
-        WorldStateId[] actual)
+        BlockStateId[] actual)
     {
-        WorldStateId[] expected = (WorldStateId[])canonical.Clone();
+        BlockStateId[] expected = (BlockStateId[])canonical.Clone();
         _ = ApplyDenseEdits(expected, trace);
         if (!actual.AsSpan().SequenceEqual(expected))
         {
@@ -1625,7 +1625,7 @@ internal static class E1CoreDataReport
         return checksum;
     }
 
-    private static ulong ReadDenseRandom(WorldStateId[] states, int[] trace)
+    private static ulong ReadDenseRandom(BlockStateId[] states, int[] trace)
     {
         ulong checksum = 0;
         foreach (int index in trace)
@@ -1650,12 +1650,12 @@ internal static class E1CoreDataReport
         return checksum;
     }
 
-    private static ulong ReadDenseLinear(ReadOnlySpan<WorldStateId> states)
+    private static ulong ReadDenseLinear(ReadOnlySpan<BlockStateId> states)
     {
         ulong checksum = 0;
         for (int pass = 0; pass < 2; pass++)
         {
-            foreach (WorldStateId state in states)
+            foreach (BlockStateId state in states)
             {
                 checksum = unchecked((checksum * 0x100000001B3UL) ^ state.Value);
             }
@@ -1695,7 +1695,7 @@ internal static class E1CoreDataReport
         return checksum;
     }
 
-    private static ulong ApplyDenseEdits(WorldStateId[] states, SectionEdit[] trace)
+    private static ulong ApplyDenseEdits(BlockStateId[] states, SectionEdit[] trace)
     {
         ulong checksum = 0xCBF29CE484222325UL;
         foreach (SectionEdit edit in trace)
@@ -1709,22 +1709,22 @@ internal static class E1CoreDataReport
         return checksum;
     }
 
-    private static SectionWriteResult SetDenseUnchecked(Span<WorldStateId> states, SectionEdit edit)
+    private static SectionWriteResult SetDenseUnchecked(Span<BlockStateId> states, SectionEdit edit)
     {
         states[edit.GlobalIndex] = edit.State;
         return SectionWriteResult.Changed;
     }
 
     private static void VerifySemanticCopies(
-        WorldStateId[] canonical,
+        BlockStateId[] canonical,
         MutableSectionBlockStates[] one32,
         MutableSectionBlockStates[] eight16,
         int ordinal,
         SectionFixtureKind distribution,
         string expectedFingerprint)
     {
-        WorldStateId[] one32Copy = CopyCanonicalFromSnapshots(one32, SectionEqualVolumeLayout.OneSide32);
-        WorldStateId[] eight16Copy = CopyCanonicalFromSnapshots(eight16, SectionEqualVolumeLayout.EightSide16);
+        BlockStateId[] one32Copy = CopyCanonicalFromSnapshots(one32, SectionEqualVolumeLayout.OneSide32);
+        BlockStateId[] eight16Copy = CopyCanonicalFromSnapshots(eight16, SectionEqualVolumeLayout.EightSide16);
         if (!one32Copy.AsSpan().SequenceEqual(canonical) || !eight16Copy.AsSpan().SequenceEqual(canonical))
         {
             throw new InvalidOperationException($"Snapshot semantic copy differs from the dense cube for ordinal {ordinal}.");
@@ -1739,7 +1739,7 @@ internal static class E1CoreDataReport
         }
     }
 
-    private static WorldStateId[] CopyCanonicalFromSnapshots(MutableSectionBlockStates[] sections, SectionEqualVolumeLayout layout)
+    private static BlockStateId[] CopyCanonicalFromSnapshots(MutableSectionBlockStates[] sections, SectionEqualVolumeLayout layout)
     {
         IReadOnlySectionBlockStates[] snapshots = new IReadOnlySectionBlockStates[sections.Length];
         for (int index = 0; index < sections.Length; index++)
@@ -1747,7 +1747,7 @@ internal static class E1CoreDataReport
             snapshots[index] = sections[index].CaptureSnapshot();
         }
 
-        WorldStateId[] result = new WorldStateId[CubeVolume];
+        BlockStateId[] result = new BlockStateId[CubeVolume];
         SectionEqualVolumeFixture.CopyToCanonicalUnchecked(
             snapshots,
             layout,
@@ -1764,7 +1764,7 @@ internal static class E1CoreDataReport
         IEnumerable<int>? selectedSectionIndices = null)
     {
         HashSet<int>? selected = selectedSectionIndices is null ? null : [.. selectedSectionIndices];
-        HashSet<WorldStateId>? selectedStateIds = selected is null ? null : [new WorldStateId(0)];
+        HashSet<BlockStateId>? selectedStateIds = selected is null ? null : [new BlockStateId(0)];
         List<LogicalSectionInput> inputs = [];
         for (int index = 0; index < sections.Length; index++)
         {
@@ -1774,11 +1774,11 @@ internal static class E1CoreDataReport
             }
 
             SectionBlockStateSnapshot snapshot = sections[index].CaptureSnapshot();
-            WorldStateId[] semantic = new WorldStateId[snapshot.Count];
+            BlockStateId[] semantic = new BlockStateId[snapshot.Count];
             snapshot.CopyTo(semantic);
             if (selectedStateIds is not null)
             {
-                foreach (WorldStateId state in semantic)
+                foreach (BlockStateId state in semantic)
                 {
                     _ = selectedStateIds.Add(state);
                 }
@@ -1823,15 +1823,15 @@ internal static class E1CoreDataReport
             new SectionCoord(checked((ordinal * 2L) + x), y, z));
     }
 
-    private static WorldStateMap CreateWorldStateMap(ReadOnlySpan<WorldStateId> states)
+    private static WorldStateMap CreateWorldStateMap(ReadOnlySpan<BlockStateId> states)
     {
         HashSet<uint> ids = [];
-        foreach (WorldStateId state in states)
+        foreach (BlockStateId state in states)
         {
             _ = ids.Add(state.Value);
         }
 
-        List<WorldStateBinding> bindings = [new WorldStateBinding(new WorldStateId(0), CanonicalBlockState.Air)];
+        List<WorldStateBinding> bindings = [new WorldStateBinding(new BlockStateId(0), CanonicalBlockState.Air)];
         foreach (uint value in ids.Order())
         {
             if (value == 0)
@@ -1839,7 +1839,7 @@ internal static class E1CoreDataReport
                 continue;
             }
 
-            bindings.Add(new WorldStateBinding(new WorldStateId(value), CreateCanonicalState(value)));
+            bindings.Add(new WorldStateBinding(new BlockStateId(value), CreateCanonicalState(value)));
         }
 
         return WorldStateMap.Restore(bindings);
@@ -1847,14 +1847,14 @@ internal static class E1CoreDataReport
 
     private static CanonicalBlockState CreateCanonicalState(uint id)
     {
-        ContentKey block = ContentKey.Create("fixture", $"state-{id.ToString(CultureInfo.InvariantCulture)}");
+        NamespacedContentId block = NamespacedContentId.Create("fixture", $"state-{id.ToString(CultureInfo.InvariantCulture)}");
         return id % 5 == 0
-            ? new CanonicalBlockState(block, [BlockStateProperty.Create(ContentKey.Create("fixture", "variant"), (id % 17).ToString(CultureInfo.InvariantCulture))])
+            ? new CanonicalBlockState(block, [BlockStateProperty.Create(NamespacedContentId.Create("fixture", "variant"), (id % 17).ToString(CultureInfo.InvariantCulture))])
             : new CanonicalBlockState(block, []);
     }
 
     private static string ComputeSemanticFingerprint(
-        ReadOnlySpan<WorldStateId> canonical,
+        ReadOnlySpan<BlockStateId> canonical,
         int ordinal,
         SectionFixtureKind distribution)
     {

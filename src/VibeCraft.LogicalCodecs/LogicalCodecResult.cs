@@ -42,8 +42,8 @@ public enum LogicalCodecFailureCode : byte
     /// <summary>An index is outside the bounds of the referenced logical collection.</summary>
     IndexOutOfRange = 12,
 
-    /// <summary>A referenced world-state identity cannot be mapped in the active world.</summary>
-    UnmappedWorldState = 13,
+    /// <summary>A referenced block-state identity cannot be mapped in the active world.</summary>
+    UnmappedBlockState = 13,
 
     /// <summary>Bytes remain after one complete codec value was decoded.</summary>
     TrailingData = 14,
@@ -88,8 +88,8 @@ public enum LogicalCodecField : byte
     /// <summary>A world-state mapping or one of its bindings.</summary>
     Mapping = 10,
 
-    /// <summary>A namespaced content key.</summary>
-    ContentKey = 11,
+    /// <summary>A namespaced content ID.</summary>
+    NamespacedContentId = 11,
 
     /// <summary>A content property or its value.</summary>
     Property = 12,

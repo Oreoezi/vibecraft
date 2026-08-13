@@ -33,10 +33,10 @@ public static class CanonicalLogicalProjectionCodecV1
     /// <summary>The largest complete fixture encoding accepted or produced by this codec.</summary>
     public const int MaxEncodedBytes = 64 * 1024 * 1024;
 
-    private const int MinEncodedContentKeyBytes = 2 + 1 + 2 + 1;
-    private const int MinEncodedMappingBytes = sizeof(uint) + MinEncodedContentKeyBytes + sizeof(ushort);
-    private const int MinEncodedSparseBytes = sizeof(ushort) + MinEncodedContentKeyBytes + sizeof(uint);
-    private const int MinEncodedScheduleBytes = sizeof(byte) + sizeof(ulong) + sizeof(byte) + sizeof(ulong) + sizeof(ushort) + MinEncodedContentKeyBytes;
+    private const int MinEncodedNamespacedContentIdBytes = 2 + 1 + 2 + 1;
+    private const int MinEncodedMappingBytes = sizeof(uint) + MinEncodedNamespacedContentIdBytes + sizeof(ushort);
+    private const int MinEncodedSparseBytes = sizeof(ushort) + MinEncodedNamespacedContentIdBytes + sizeof(uint);
+    private const int MinEncodedScheduleBytes = sizeof(byte) + sizeof(ulong) + sizeof(byte) + sizeof(ulong) + sizeof(ushort) + MinEncodedNamespacedContentIdBytes;
     private const int MinEncodedSectionBytes = LogicalRecordKeyCodecV1.EncodedSize + sizeof(byte) + sizeof(ushort) + sizeof(uint) + (16 * 16 * 16 * sizeof(ushort)) + sizeof(uint) + sizeof(uint);
 
     private static ReadOnlySpan<byte> MagicBytes => "VCG1LP01"u8;
@@ -207,7 +207,7 @@ public static class CanonicalLogicalProjectionCodecV1
         writer.WriteUInt32(checked((uint)projection.MappingBindings.Length));
         writer.WriteUInt32(checked((uint)projection.Sections.Length));
 
-        WorldStateId? previousId = null;
+        BlockStateId? previousId = null;
         HashSet<CanonicalBlockState> mappedStates = [];
         HashSet<uint> mappedIds = [];
         foreach (WorldStateBinding binding in projection.MappingBindings)
@@ -243,14 +243,14 @@ public static class CanonicalLogicalProjectionCodecV1
 
     private static void WriteBlockState(CanonicalWriter writer, CanonicalBlockState state)
     {
-        WriteContentKey(writer, state.Block, LogicalCodecField.ContentKey);
+        WriteNamespacedContentId(writer, state.Block, LogicalCodecField.NamespacedContentId);
         if (state.Properties.IsDefault || state.Properties.Length > CanonicalBlockState.MaxProperties)
         {
             throw InvalidWrite(LogicalCodecFailureCode.LimitExceeded, writer.Offset, LogicalCodecField.Property);
         }
 
         writer.WriteUInt16(checked((ushort)state.Properties.Length));
-        ContentKey? previous = null;
+        NamespacedContentId? previous = null;
         foreach (BlockStateProperty property in state.Properties)
         {
             if (!property.IsValid || (previous.HasValue && previous.Value.CompareTo(property.Key) >= 0))
@@ -259,7 +259,7 @@ public static class CanonicalLogicalProjectionCodecV1
             }
 
             previous = property.Key;
-            WriteContentKey(writer, property.Key, LogicalCodecField.Property);
+            WriteNamespacedContentId(writer, property.Key, LogicalCodecField.Property);
             writer.WriteAscii(property.Value, BlockStateProperty.MaxValueLength, LogicalCodecField.Property);
         }
     }
@@ -295,8 +295,8 @@ public static class CanonicalLogicalProjectionCodecV1
 
         writer.WriteByte(checked((byte)side));
         writer.WriteUInt16(checked((ushort)section.Palette.Length));
-        WorldStateId? previousPalette = null;
-        foreach (WorldStateId paletteEntry in section.Palette)
+        BlockStateId? previousPalette = null;
+        foreach (BlockStateId paletteEntry in section.Palette)
         {
             if (!mappedIds.Contains(paletteEntry.Value) || (previousPalette.HasValue && paletteEntry.Value <= previousPalette.Value.Value))
             {
@@ -329,15 +329,15 @@ public static class CanonicalLogicalProjectionCodecV1
         int previousSparseIndex = -1;
         foreach (LogicalSparseRecord sparse in section.SparseRecords)
         {
-            if (sparse is null || sparse.LocalIndex <= previousSparseIndex || sparse.LocalIndex >= volume ||
+            if (sparse is null || sparse.LocalIndex.Value <= previousSparseIndex || sparse.LocalIndex.Value >= volume ||
                 !sparse.Type.IsValid || sparse.Payload.IsDefault || sparse.Payload.Length > LogicalSparseRecord.MaxPayloadBytes)
             {
                 throw InvalidWrite(LogicalCodecFailureCode.NonCanonicalOrder, writer.Offset, LogicalCodecField.Sparse);
             }
 
-            previousSparseIndex = sparse.LocalIndex;
-            writer.WriteUInt16(checked((ushort)sparse.LocalIndex));
-            WriteContentKey(writer, sparse.Type, LogicalCodecField.ContentKey);
+            previousSparseIndex = sparse.LocalIndex.Value;
+            writer.WriteUInt16(checked((ushort)sparse.LocalIndex.Value));
+            WriteNamespacedContentId(writer, sparse.Type, LogicalCodecField.NamespacedContentId);
             writer.WriteUInt32(checked((uint)sparse.Payload.Length));
             writer.WriteBytes(sparse.Payload.AsSpan());
         }
@@ -349,7 +349,7 @@ public static class CanonicalLogicalProjectionCodecV1
         foreach (LogicalScheduledTick tick in section.ScheduledTicks)
         {
             if (!Enum.IsDefined(tick.Queue) || tick.Priority is < LogicalScheduledTick.MinimumPriority or > LogicalScheduledTick.MaximumPriority ||
-                tick.LocalIndex < 0 || tick.LocalIndex >= volume || !tick.ExpectedType.IsValid || !sequences.Add(tick.Sequence) ||
+                tick.LocalIndex.Value >= volume || !tick.ExpectedType.IsValid || !sequences.Add(tick.Sequence) ||
                 !coalescing.Add(new ScheduledTickIdentity(tick.Queue, tick.LocalIndex, tick.ExpectedType)) ||
                 (previousTick.HasValue && CompareTicks(previousTick.Value, tick) >= 0))
             {
@@ -361,8 +361,8 @@ public static class CanonicalLogicalProjectionCodecV1
             writer.WriteUInt64(tick.DueTick.Value);
             writer.WriteByte(unchecked((byte)tick.Priority));
             writer.WriteUInt64(tick.Sequence);
-            writer.WriteUInt16(checked((ushort)tick.LocalIndex));
-            WriteContentKey(writer, tick.ExpectedType, LogicalCodecField.ExpectedType);
+            writer.WriteUInt16(checked((ushort)tick.LocalIndex.Value));
+            WriteNamespacedContentId(writer, tick.ExpectedType, LogicalCodecField.ExpectedType);
         }
     }
 
@@ -391,7 +391,7 @@ public static class CanonicalLogicalProjectionCodecV1
             }
 
             previousId = id;
-            if (!TryReadContentKey(ref reader, LogicalCodecField.ContentKey, -1, mappingIndex, out ContentKey block, out failure))
+            if (!TryReadNamespacedContentId(ref reader, LogicalCodecField.NamespacedContentId, -1, mappingIndex, out NamespacedContentId block, out failure))
             {
                 mapping = null;
                 return false;
@@ -408,17 +408,17 @@ public static class CanonicalLogicalProjectionCodecV1
                 return FailRead(ref mapping, out failure, LogicalCodecFailureCode.LimitExceeded, propertyCountOffset, LogicalCodecField.Property, -1, mappingIndex);
             }
 
-            if ((long)propertyCount * (MinEncodedContentKeyBytes + 3) > reader.Remaining)
+            if ((long)propertyCount * (MinEncodedNamespacedContentIdBytes + 3) > reader.Remaining)
             {
                 return FailRead(ref mapping, out failure, LogicalCodecFailureCode.IncorrectLength, reader.Offset, LogicalCodecField.Property, -1, mappingIndex);
             }
 
             List<BlockStateProperty> properties = new(propertyCount);
-            ContentKey? previousKey = null;
+            NamespacedContentId? previousKey = null;
             for (int propertyIndex = 0; propertyIndex < propertyCount; propertyIndex++)
             {
                 int keyOffset = reader.Offset;
-                if (!TryReadContentKey(ref reader, LogicalCodecField.Property, -1, propertyIndex, out ContentKey key, out failure))
+                if (!TryReadNamespacedContentId(ref reader, LogicalCodecField.Property, -1, propertyIndex, out NamespacedContentId key, out failure))
                 {
                     mapping = null;
                     return false;
@@ -462,7 +462,7 @@ public static class CanonicalLogicalProjectionCodecV1
                 return FailRead(ref mapping, out failure, LogicalCodecFailureCode.DuplicateIdentity, idOffset, LogicalCodecField.Mapping, -1, mappingIndex);
             }
 
-            bindings.Add(new WorldStateBinding(new WorldStateId(id), state));
+            bindings.Add(new WorldStateBinding(new BlockStateId(id), state));
         }
 
         try
@@ -548,7 +548,7 @@ public static class CanonicalLogicalProjectionCodecV1
             return FailRead(out failure, LogicalCodecFailureCode.IncorrectLength, reader.Offset, LogicalCodecField.Palette, recordIndex);
         }
 
-        List<WorldStateId> palette = new(paletteCount);
+        List<BlockStateId> palette = new(paletteCount);
         uint previousStateId = 0;
         for (int paletteIndex = 0; paletteIndex < paletteCount; paletteIndex++)
         {
@@ -564,17 +564,17 @@ public static class CanonicalLogicalProjectionCodecV1
                 return FailRead(out failure, code, paletteOffset, LogicalCodecField.Palette, recordIndex, paletteIndex);
             }
 
-            WorldStateId value = new(stateId);
+            BlockStateId value = new(stateId);
             if (!mapping.TryGetState(value, out _))
             {
-                return FailRead(out failure, LogicalCodecFailureCode.UnmappedWorldState, paletteOffset, LogicalCodecField.Palette, recordIndex, paletteIndex);
+                return FailRead(out failure, LogicalCodecFailureCode.UnmappedBlockState, paletteOffset, LogicalCodecField.Palette, recordIndex, paletteIndex);
             }
 
             previousStateId = stateId;
             palette.Add(value);
         }
 
-        List<WorldStateId> states = new(volume);
+        List<BlockStateId> states = new(volume);
         bool[] usedPalette = new bool[paletteCount];
         for (int voxelIndex = 0; voxelIndex < volume; voxelIndex++)
         {
@@ -669,7 +669,7 @@ public static class CanonicalLogicalProjectionCodecV1
             }
 
             previousIndex = localIndex;
-            if (!TryReadContentKey(ref reader, LogicalCodecField.ContentKey, recordIndex, sparseIndex, out ContentKey type, out failure))
+            if (!TryReadNamespacedContentId(ref reader, LogicalCodecField.NamespacedContentId, recordIndex, sparseIndex, out NamespacedContentId type, out failure))
             {
                 return false;
             }
@@ -690,7 +690,7 @@ public static class CanonicalLogicalProjectionCodecV1
                 return FailRead(out failure, LogicalCodecFailureCode.IncorrectLength, reader.Offset, LogicalCodecField.Payload, recordIndex, sparseIndex);
             }
 
-            sparse.Add(LogicalSparseInput.FromEncoded(localIndex, type, payload));
+            sparse.Add(LogicalSparseInput.FromEncoded(new LocalIndex(localIndex), type, payload));
         }
 
         failure = null;
@@ -771,7 +771,7 @@ public static class CanonicalLogicalProjectionCodecV1
                 return FailRead(out failure, LogicalCodecFailureCode.IndexOutOfRange, localIndexOffset, LogicalCodecField.LocalIndex, recordIndex, scheduleIndex);
             }
 
-            if (!TryReadContentKey(ref reader, LogicalCodecField.ExpectedType, recordIndex, scheduleIndex, out ContentKey expectedType, out failure))
+            if (!TryReadNamespacedContentId(ref reader, LogicalCodecField.ExpectedType, recordIndex, scheduleIndex, out NamespacedContentId expectedType, out failure))
             {
                 return false;
             }
@@ -782,12 +782,13 @@ public static class CanonicalLogicalProjectionCodecV1
             }
 
             LogicalScheduledTickQueueKind queue = (LogicalScheduledTickQueueKind)queueByte;
-            if (!coalescing.Add(new ScheduledTickIdentity(queue, localIndex, expectedType)))
+            LocalIndex typedLocalIndex = new(localIndex);
+            if (!coalescing.Add(new ScheduledTickIdentity(queue, typedLocalIndex, expectedType)))
             {
                 return FailRead(out failure, LogicalCodecFailureCode.DuplicateIdentity, queueOffset, LogicalCodecField.Schedule, recordIndex, scheduleIndex);
             }
 
-            LogicalScheduledTick tick = new(queue, new WorldTick(dueTick), priority, sequence, localIndex, expectedType);
+            LogicalScheduledTick tick = new(queue, new WorldTick(dueTick), priority, sequence, typedLocalIndex, expectedType);
             if (previous.HasValue && CompareTicks(previous.Value, tick) >= 0)
             {
                 return FailRead(out failure, LogicalCodecFailureCode.NonCanonicalOrder, queueOffset, LogicalCodecField.Schedule, recordIndex, scheduleIndex);
@@ -801,25 +802,25 @@ public static class CanonicalLogicalProjectionCodecV1
         return true;
     }
 
-    private static bool TryReadContentKey(
+    private static bool TryReadNamespacedContentId(
         ref Reader reader,
         LogicalCodecField field,
         int recordIndex,
         int elementIndex,
-        out ContentKey key,
+        out NamespacedContentId key,
         out LogicalCodecFailure? failure)
     {
         key = default;
         int offset = reader.Offset;
-        if (!TryReadAscii(ref reader, ContentKey.MaxNamespaceLength, field, recordIndex, elementIndex, out string @namespace, out failure) ||
-            !TryReadAscii(ref reader, ContentKey.MaxPathLength, field, recordIndex, elementIndex, out string path, out failure))
+        if (!TryReadAscii(ref reader, NamespacedContentId.MaxNamespaceLength, field, recordIndex, elementIndex, out string @namespace, out failure) ||
+            !TryReadAscii(ref reader, NamespacedContentId.MaxPathLength, field, recordIndex, elementIndex, out string path, out failure))
         {
             return false;
         }
 
         try
         {
-            key = ContentKey.Create(@namespace, path);
+            key = NamespacedContentId.Create(@namespace, path);
             return true;
         }
         catch (ArgumentException)
@@ -868,15 +869,15 @@ public static class CanonicalLogicalProjectionCodecV1
         return true;
     }
 
-    private static void WriteContentKey(CanonicalWriter writer, ContentKey key, LogicalCodecField field)
+    private static void WriteNamespacedContentId(CanonicalWriter writer, NamespacedContentId key, LogicalCodecField field)
     {
         if (!key.IsValid)
         {
             throw InvalidWrite(LogicalCodecFailureCode.InvalidText, writer.Offset, field);
         }
 
-        writer.WriteAscii(key.Namespace, ContentKey.MaxNamespaceLength, field);
-        writer.WriteAscii(key.Path, ContentKey.MaxPathLength, field);
+        writer.WriteAscii(key.Namespace, NamespacedContentId.MaxNamespaceLength, field);
+        writer.WriteAscii(key.Path, NamespacedContentId.MaxPathLength, field);
     }
 
     private static int CompareTicks(LogicalScheduledTick left, LogicalScheduledTick right)
@@ -921,8 +922,8 @@ public static class CanonicalLogicalProjectionCodecV1
 
     private readonly record struct ScheduledTickIdentity(
         LogicalScheduledTickQueueKind Queue,
-        int LocalIndex,
-        ContentKey ExpectedType);
+        LocalIndex LocalIndex,
+        NamespacedContentId ExpectedType);
 
     private sealed class CodecWriteException(LogicalCodecFailure failure) : Exception
     {

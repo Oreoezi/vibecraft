@@ -22,7 +22,7 @@ internal static class SectionCandidateFixture
     internal const string FixtureId = "VC-G1-E1-SECTIONS-0.1.0";
     internal const ulong DefaultSeed = 0x5643424654314531UL;
 
-    internal static WorldStateId[] CreateStates(
+    internal static BlockStateId[] CreateStates(
         SectionGeometry geometry,
         SectionFixtureKind kind,
         ulong seed = DefaultSeed,
@@ -31,14 +31,14 @@ internal static class SectionCandidateFixture
         SectionGeometry validatedGeometry = new(geometry.Side);
         int side = validatedGeometry.Side.Value;
         int volume = checked(side * side * side);
-        WorldStateId[] states = new WorldStateId[volume];
+        BlockStateId[] states = new BlockStateId[volume];
 
         switch (kind)
         {
             case SectionFixtureKind.UniformAir:
                 break;
             case SectionFixtureKind.UniformStone:
-                Array.Fill(states, new WorldStateId(1));
+                Array.Fill(states, new BlockStateId(1));
                 break;
             case SectionFixtureKind.Layered:
                 FillLayered(states, side);
@@ -49,7 +49,7 @@ internal static class SectionCandidateFixture
             case SectionFixtureKind.HighEntropy:
                 for (int index = 0; index < states.Length; index++)
                 {
-                    states[index] = new WorldStateId(checked((uint)index + 1U));
+                    states[index] = new BlockStateId(checked((uint)index + 1U));
                 }
 
                 break;
@@ -61,7 +61,7 @@ internal static class SectionCandidateFixture
 
                 for (int index = 0; index < states.Length; index++)
                 {
-                    states[index] = new WorldStateId(checked((uint)(index % paletteSize) + 1U));
+                    states[index] = new BlockStateId(checked((uint)(index % paletteSize) + 1U));
                 }
 
                 break;
@@ -74,7 +74,7 @@ internal static class SectionCandidateFixture
 
     internal static MutableSectionBlockStates CreateSection(
         SectionGeometry geometry,
-        ReadOnlySpan<WorldStateId> states,
+        ReadOnlySpan<BlockStateId> states,
         SectionRevision revision = default)
     {
         SectionGeometry validatedGeometry = new(geometry.Side);
@@ -108,7 +108,7 @@ internal static class SectionCandidateFixture
         {
             if (!states[index].Equals(states[0]))
             {
-                SectionWriteResult result = section.TrySet(ToLocal(index, side), states[index]);
+                SectionWriteResult result = section.TrySet(validatedGeometry.GetLocalBlock(new LocalIndex(index)), states[index]);
                 if (result != SectionWriteResult.Changed)
                 {
                     throw new InvalidOperationException($"Validated fixture construction unexpectedly returned {result} at semantic index {index}.");
@@ -119,8 +119,8 @@ internal static class SectionCandidateFixture
         return section;
     }
 
-    internal static WorldStateId[] ExtractSide16(
-        ReadOnlySpan<WorldStateId> canonicalSide32Cube,
+    internal static BlockStateId[] ExtractSide16(
+        ReadOnlySpan<BlockStateId> canonicalSide32Cube,
         int sectionX,
         int sectionY,
         int sectionZ)
@@ -136,7 +136,7 @@ internal static class SectionCandidateFixture
         ValidateOctant(sectionY, nameof(sectionY));
         ValidateOctant(sectionZ, nameof(sectionZ));
 
-        WorldStateId[] result = new WorldStateId[smallSide * smallSide * smallSide];
+        BlockStateId[] result = new BlockStateId[smallSide * smallSide * smallSide];
         for (int y = 0; y < smallSide; y++)
         {
             int sourceY = (sectionY * smallSide) + y;
@@ -156,26 +156,22 @@ internal static class SectionCandidateFixture
         return result;
     }
 
-    internal static LocalBlock ToLocal(int index, int side)
+    internal static LocalBlock ToLocal(LocalIndex index, SectionGeometry geometry)
     {
-        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual((uint)index, checked((uint)(side * side * side)), nameof(index));
-        int x = index % side;
-        int z = index / side % side;
-        int y = index / checked(side * side);
-        return new LocalBlock(x, y, z);
+        return geometry.GetLocalBlock(index);
     }
 
-    private static void FillLayered(Span<WorldStateId> states, int side)
+    private static void FillLayered(Span<BlockStateId> states, int side)
     {
         int half = side / 2;
         for (int y = 0; y < side; y++)
         {
             uint state = y < half ? 1U : y == half ? 2U : y == half + 1 ? 3U : 0U;
-            states.Slice(y * side * side, side * side).Fill(new WorldStateId(state));
+            states.Slice(y * side * side, side * side).Fill(new BlockStateId(state));
         }
     }
 
-    private static void FillMixed(Span<WorldStateId> states, int side, ulong seed)
+    private static void FillMixed(Span<BlockStateId> states, int side, ulong seed)
     {
         FillLayered(states, side);
         for (int y = 0; y < side; y++)
@@ -189,7 +185,7 @@ internal static class SectionCandidateFixture
                     ulong clusterHash = Mix(seed ^ ((ulong)(x >> 2) * 0x94D049BB133111EBUL) ^ ((ulong)(y >> 2) * 0xBF58476D1CE4E5B9UL) ^ ((ulong)(z >> 2) * 0xD6E8FEB86659FD93UL));
                     if ((cellHash & 15UL) == 0UL || clusterHash % 19UL == 0UL)
                     {
-                        states[index] = new WorldStateId(checked(4U + (uint)((cellHash ^ clusterHash) % 60UL)));
+                        states[index] = new BlockStateId(checked(4U + (uint)((cellHash ^ clusterHash) % 60UL)));
                     }
                 }
             }

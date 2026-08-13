@@ -9,9 +9,9 @@ namespace VibeCraft.G1.Benchmarks.Sections;
 [BenchmarkCategory(SectionCandidateFixture.FixtureId)]
 public class SectionStorageReadBenchmarks
 {
-    private WorldStateId[] _dense = null!;
+    private BlockStateId[] _dense = null!;
     private MutableSectionBlockStates _section = null!;
-    private WorldStateId[] _projection = null!;
+    private BlockStateId[] _projection = null!;
     private int[] _randomTrace = null!;
     private LocalBlock[] _randomLocals = null!;
     private LocalBlock[] _linearLocals = null!;
@@ -30,7 +30,7 @@ public class SectionStorageReadBenchmarks
         SectionGeometry geometry = new(new SectionSide(Side));
         _dense = SectionCandidateFixture.CreateStates(geometry, SectionBenchmarkSupport.ParseFixture(Fixture), seed);
         _section = SectionCandidateFixture.CreateSection(geometry, _dense);
-        _projection = new WorldStateId[_dense.Length];
+        _projection = new BlockStateId[_dense.Length];
         _section.CopyTo(_projection);
         if (!_projection.AsSpan().SequenceEqual(_dense))
         {
@@ -44,13 +44,13 @@ public class SectionStorageReadBenchmarks
         _randomLocals = new LocalBlock[_randomTrace.Length];
         for (int index = 0; index < _randomTrace.Length; index++)
         {
-            _randomLocals[index] = SectionCandidateFixture.ToLocal(_randomTrace[index], Side);
+            _randomLocals[index] = SectionCandidateFixture.ToLocal(new LocalIndex(_randomTrace[index]), geometry);
         }
 
         _linearLocals = new LocalBlock[_dense.Length];
         for (int index = 0; index < _linearLocals.Length; index++)
         {
-            _linearLocals[index] = SectionCandidateFixture.ToLocal(index, Side);
+            _linearLocals[index] = SectionCandidateFixture.ToLocal(new LocalIndex(index), geometry);
         }
     }
 
@@ -122,10 +122,10 @@ public class SectionStorageReadBenchmarks
 public class SectionStorageEditBenchmarks
 {
     private const int ClusterCount = 64;
-    private WorldStateId[] _canonical = null!;
-    private WorldStateId[] _denseCandidate = null!;
+    private BlockStateId[] _canonical = null!;
+    private BlockStateId[] _denseCandidate = null!;
     private MutableSectionBlockStates _adaptiveCandidate = null!;
-    private SectionEdit[] _trace = null!;
+    private LocalSectionEdit[] _trace = null!;
     private LocalBlock[] _locals = null!;
 
     [Params(16, 32)]
@@ -148,7 +148,7 @@ public class SectionStorageEditBenchmarks
         bool hasNewStateChange = false;
         for (int index = 0; index < _trace.Length; index++)
         {
-            _locals[index] = SectionCandidateFixture.ToLocal(_trace[index].GlobalIndex, Side);
+            _locals[index] = SectionCandidateFixture.ToLocal(_trace[index].Index, geometry);
             hasNoOp |= _trace[index].Intent == SectionEditIntent.NoOp;
             hasExistingStateChange |= _trace[index].Intent == SectionEditIntent.ExistingStateChange;
             hasNewStateChange |= _trace[index].Intent == SectionEditIntent.NewStateChange;
@@ -173,7 +173,7 @@ public class SectionStorageEditBenchmarks
     [IterationSetup(Target = nameof(DenseClusteredEdits))]
     public void SetupDense()
     {
-        _denseCandidate = (WorldStateId[])_canonical.Clone();
+        _denseCandidate = (BlockStateId[])_canonical.Clone();
     }
 
     [Benchmark]
@@ -183,7 +183,7 @@ public class SectionStorageEditBenchmarks
         for (int index = 0; index < _trace.Length; index++)
         {
             SectionWriteResult result = _adaptiveCandidate.TrySet(_locals[index], _trace[index].State);
-            checksum = SectionBenchmarkSupport.AddEditChecksum(checksum, _trace[index], result);
+            checksum = AddLocalEditChecksum(checksum, _trace[index], result);
         }
 
         return checksum;
@@ -193,25 +193,26 @@ public class SectionStorageEditBenchmarks
     public ulong DenseClusteredEdits()
     {
         ulong checksum = 0xCBF29CE484222325UL;
-        foreach (SectionEdit edit in _trace)
+        foreach (LocalSectionEdit edit in _trace)
         {
             SectionWriteResult result = SetDense(_denseCandidate, edit);
-            checksum = SectionBenchmarkSupport.AddEditChecksum(checksum, edit, result);
+            checksum = AddLocalEditChecksum(checksum, edit, result);
         }
 
         return checksum;
     }
 
-    private static SectionEdit[] CreateClusteredTrace(
-        ReadOnlySpan<WorldStateId> canonical,
+    private static LocalSectionEdit[] CreateClusteredTrace(
+        ReadOnlySpan<BlockStateId> canonical,
         int side,
         ulong seed)
     {
         const int clusterSide = 4;
         const int editsPerCluster = clusterSide * clusterSide * clusterSide;
-        WorldStateId[] working = canonical.ToArray();
-        WorldStateId[] existingStates = [.. canonical.ToArray().Distinct().OrderBy(state => state.Value)];
-        SectionEdit[] trace = new SectionEdit[ClusterCount * editsPerCluster];
+        BlockStateId[] working = canonical.ToArray();
+        BlockStateId[] existingStates = [.. canonical.ToArray().Distinct().OrderBy(state => state.Value)];
+        SectionGeometry geometry = new(new SectionSide(side));
+        LocalSectionEdit[] trace = new LocalSectionEdit[ClusterCount * editsPerCluster];
         ulong random = seed ^ checked((uint)side) ^ 0xD1B54A32D192ED03UL;
         int originRange = side - clusterSide + 1;
         int traceIndex = 0;
@@ -229,23 +230,23 @@ public class SectionStorageEditBenchmarks
                         int x = originX + localX;
                         int y = originY + localY;
                         int z = originZ + localZ;
-                        int localIndex = x + (side * (z + (side * y)));
+                        LocalIndex localIndex = geometry.GetLocalIndex(geometry.CreateLocal(x, y, z));
                         SectionEditIntent requestedIntent = (traceIndex % 4) switch
                         {
                             0 or 3 => SectionEditIntent.NoOp,
                             1 => SectionEditIntent.ExistingStateChange,
                             _ => SectionEditIntent.NewStateChange,
                         };
-                        WorldStateId state = SelectEditState(
-                            working[localIndex],
+                        BlockStateId state = SelectEditState(
+                            working[localIndex.Value],
                             existingStates,
                             requestedIntent,
                             traceIndex,
                             out SectionEditIntent actualIntent);
-                        trace[traceIndex] = new SectionEdit(localIndex, state, actualIntent);
+                        trace[traceIndex] = new LocalSectionEdit(localIndex, state, actualIntent);
                         if (actualIntent != SectionEditIntent.NoOp)
                         {
-                            working[localIndex] = state;
+                            working[localIndex.Value] = state;
                         }
 
                         traceIndex++;
@@ -257,9 +258,9 @@ public class SectionStorageEditBenchmarks
         return trace;
     }
 
-    private static WorldStateId SelectEditState(
-        WorldStateId current,
-        WorldStateId[] existingStates,
+    private static BlockStateId SelectEditState(
+        BlockStateId current,
+        BlockStateId[] existingStates,
         SectionEditIntent requestedIntent,
         int traceIndex,
         out SectionEditIntent actualIntent)
@@ -275,7 +276,7 @@ public class SectionStorageEditBenchmarks
             int start = traceIndex % existingStates.Length;
             for (int offset = 0; offset < existingStates.Length; offset++)
             {
-                WorldStateId candidate = existingStates[(start + offset) % existingStates.Length];
+                BlockStateId candidate = existingStates[(start + offset) % existingStates.Length];
                 if (!candidate.Equals(current))
                 {
                     actualIntent = requestedIntent;
@@ -285,23 +286,33 @@ public class SectionStorageEditBenchmarks
         }
 
         actualIntent = SectionEditIntent.NewStateChange;
-        return new WorldStateId(checked(0x80000000U + (uint)traceIndex));
+        return new BlockStateId(checked(0x80000000U + (uint)traceIndex));
     }
 
-    private static SectionWriteResult SetDense(Span<WorldStateId> dense, SectionEdit edit)
+    private static SectionWriteResult SetDense(Span<BlockStateId> dense, LocalSectionEdit edit)
     {
-        if (dense[edit.GlobalIndex].Equals(edit.State))
+        if (dense[edit.Index.Value].Equals(edit.State))
         {
             return SectionWriteResult.Unchanged;
         }
 
-        dense[edit.GlobalIndex] = edit.State;
+        dense[edit.Index.Value] = edit.State;
         return SectionWriteResult.Changed;
+    }
+
+    private static ulong AddLocalEditChecksum(
+        ulong checksum,
+        LocalSectionEdit edit,
+        SectionWriteResult result)
+    {
+        checksum = unchecked((checksum ^ checked((uint)edit.Index.Value)) * 0x100000001B3UL);
+        checksum = unchecked((checksum ^ edit.State.Value) * 0x100000001B3UL);
+        return unchecked((checksum ^ (uint)result) * 0x100000001B3UL);
     }
 
     private void ValidateTraceEquivalence(SectionGeometry geometry)
     {
-        WorldStateId[] dense = (WorldStateId[])_canonical.Clone();
+        BlockStateId[] dense = (BlockStateId[])_canonical.Clone();
         MutableSectionBlockStates adaptive = SectionCandidateFixture.CreateSection(geometry, _canonical);
         for (int index = 0; index < _trace.Length; index++)
         {
@@ -309,17 +320,22 @@ public class SectionStorageEditBenchmarks
             SectionWriteResult denseResult = SetDense(dense, _trace[index]);
             if (adaptiveResult != denseResult)
             {
-                throw new InvalidOperationException($"Adaptive/dense local edit result mismatch at local index {_trace[index].GlobalIndex}.");
+                throw new InvalidOperationException($"Adaptive/dense local edit result mismatch at local index {_trace[index].Index.Value}.");
             }
         }
 
-        WorldStateId[] projection = new WorldStateId[_canonical.Length];
+        BlockStateId[] projection = new BlockStateId[_canonical.Length];
         adaptive.CopyTo(projection);
         if (!projection.AsSpan().SequenceEqual(dense))
         {
             throw new InvalidOperationException("Adaptive/dense local edit final states differ.");
         }
     }
+
+    private readonly record struct LocalSectionEdit(
+        LocalIndex Index,
+        BlockStateId State,
+        SectionEditIntent Intent);
 }
 
 [MemoryDiagnoser]
@@ -327,16 +343,29 @@ public class SectionStorageEditBenchmarks
 public class SectionPaletteGrowthBenchmarks
 {
     private MutableSectionBlockStates _candidate = null!;
+    private SectionGeometry _geometry;
+    private LocalBlock[] _growthLocals = null!;
 
     [Params(16, 32)]
     public int Side { get; set; }
+
+    [GlobalSetup]
+    public void GlobalSetup()
+    {
+        _geometry = new SectionGeometry(new SectionSide(Side));
+        _growthLocals = new LocalBlock[257];
+        for (int index = 1; index <= 256; index++)
+        {
+            _growthLocals[index] = _geometry.GetLocalBlock(new LocalIndex(index));
+        }
+    }
 
     [IterationSetup]
     public void Setup()
     {
         SectionBenchmarkSupport.EmitObservationManifestOnce(SectionCandidateFixture.DefaultSeed, "Release");
         _candidate = new MutableSectionBlockStates(
-            new SectionGeometry(new SectionSide(Side)),
+            _geometry,
             default,
             default);
     }
@@ -348,8 +377,8 @@ public class SectionPaletteGrowthBenchmarks
         for (int index = 1; index <= 256; index++)
         {
             SectionWriteResult result = _candidate.TrySet(
-                SectionCandidateFixture.ToLocal(index, Side),
-                new WorldStateId(checked((uint)index)));
+                _growthLocals[index],
+                new BlockStateId(checked((uint)index)));
             checksum = unchecked((checksum * 31UL) + (uint)result);
         }
 

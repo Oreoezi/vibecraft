@@ -6,7 +6,7 @@ namespace VibeCraft.Content;
 public readonly record struct WorldStateBinding
 {
     /// <summary>Initializes a validated world-state binding.</summary>
-    public WorldStateBinding(WorldStateId id, CanonicalBlockState state)
+    public WorldStateBinding(BlockStateId id, CanonicalBlockState state)
     {
         ArgumentNullException.ThrowIfNull(state);
         Id = id;
@@ -14,7 +14,7 @@ public readonly record struct WorldStateBinding
     }
 
     /// <summary>Gets the world-local identifier.</summary>
-    public WorldStateId Id { get; }
+    public BlockStateId Id { get; }
 
     /// <summary>Gets the bound canonical state.</summary>
     public CanonicalBlockState State { get; }
@@ -31,7 +31,7 @@ public readonly record struct WorldStateBinding
 /// <summary>Classifies a reconciliation refusal.</summary>
 public enum WorldStateReconciliationError
 {
-    /// <summary>No further <see cref="WorldStateId"/> can be allocated without wrapping.</summary>
+    /// <summary>No further <see cref="BlockStateId"/> can be allocated without wrapping.</summary>
     IdExhausted,
 }
 
@@ -67,8 +67,8 @@ public sealed class WorldStateReconciliation
 /// <summary>Defines an immutable, append-only, world-local block-state mapping.</summary>
 public sealed class WorldStateMap
 {
-    private readonly ImmutableDictionary<WorldStateId, CanonicalBlockState> statesById;
-    private readonly ImmutableDictionary<CanonicalBlockState, WorldStateId> idsByState;
+    private readonly ImmutableDictionary<BlockStateId, CanonicalBlockState> statesById;
+    private readonly ImmutableDictionary<CanonicalBlockState, BlockStateId> idsByState;
 
     /// <summary>
     /// The maximum number of canonical states in one world-local mapping, including the mandatory air state at ID zero.
@@ -77,8 +77,8 @@ public sealed class WorldStateMap
 
     private WorldStateMap(IEnumerable<WorldStateBinding> bindings)
     {
-        ImmutableDictionary<WorldStateId, CanonicalBlockState>.Builder stateBuilder = ImmutableDictionary.CreateBuilder<WorldStateId, CanonicalBlockState>();
-        ImmutableDictionary<CanonicalBlockState, WorldStateId>.Builder idBuilder = ImmutableDictionary.CreateBuilder<CanonicalBlockState, WorldStateId>();
+        ImmutableDictionary<BlockStateId, CanonicalBlockState>.Builder stateBuilder = ImmutableDictionary.CreateBuilder<BlockStateId, CanonicalBlockState>();
+        ImmutableDictionary<CanonicalBlockState, BlockStateId>.Builder idBuilder = ImmutableDictionary.CreateBuilder<CanonicalBlockState, BlockStateId>();
 
         foreach (WorldStateBinding binding in bindings)
         {
@@ -90,7 +90,7 @@ public sealed class WorldStateMap
             binding.ThrowIfInvalid();
             if (!stateBuilder.TryAdd(binding.Id, binding.State))
             {
-                throw new ArgumentException($"World state ID {binding.Id.Value} is bound more than once.", nameof(bindings));
+                throw new ArgumentException($"BlockStateId {binding.Id.Value} is bound more than once.", nameof(bindings));
             }
 
             if (!idBuilder.TryAdd(binding.State, binding.Id))
@@ -99,9 +99,9 @@ public sealed class WorldStateMap
             }
         }
 
-        if (!stateBuilder.TryGetValue(new WorldStateId(0), out CanonicalBlockState? zeroState) || !zeroState.Equals(CanonicalBlockState.Air))
+        if (!stateBuilder.TryGetValue(new BlockStateId(0), out CanonicalBlockState? zeroState) || !zeroState.Equals(CanonicalBlockState.Air))
         {
-            throw new ArgumentException("WorldStateId 0 must be bound exactly to vibecraft:air.", nameof(bindings));
+            throw new ArgumentException("BlockStateId 0 must be bound exactly to vibecraft:air.", nameof(bindings));
         }
 
         statesById = stateBuilder.ToImmutable();
@@ -109,9 +109,9 @@ public sealed class WorldStateMap
     }
 
     /// <summary>Gets the empty world mapping, containing only <c>vibecraft:air</c> at ID zero.</summary>
-    public static WorldStateMap Empty { get; } = new([new WorldStateBinding(new WorldStateId(0), CanonicalBlockState.Air)]);
+    public static WorldStateMap Empty { get; } = new([new WorldStateBinding(new BlockStateId(0), CanonicalBlockState.Air)]);
 
-    /// <summary>Gets all bindings in ascending world-state ID order.</summary>
+    /// <summary>Gets all bindings in ascending block-state ID order.</summary>
     public ImmutableArray<WorldStateBinding> Bindings =>
         [.. statesById.OrderBy(pair => pair.Key.Value).Select(pair => new WorldStateBinding(pair.Key, pair.Value))];
 
@@ -125,14 +125,14 @@ public sealed class WorldStateMap
     }
 
     /// <summary>Attempts to get a world-local ID for a canonical state.</summary>
-    public bool TryGetId(CanonicalBlockState state, out WorldStateId id)
+    public bool TryGetId(CanonicalBlockState state, out BlockStateId id)
     {
         ArgumentNullException.ThrowIfNull(state);
         return idsByState.TryGetValue(state, out id);
     }
 
     /// <summary>Attempts to get the state bound to a world-local ID.</summary>
-    public bool TryGetState(WorldStateId id, out CanonicalBlockState? state)
+    public bool TryGetState(BlockStateId id, out CanonicalBlockState? state)
     {
         return statesById.TryGetValue(id, out state);
     }
@@ -199,7 +199,7 @@ public sealed class WorldStateMap
             }
 
             next++;
-            reconciled.Add(new WorldStateBinding(new WorldStateId(next), state));
+            reconciled.Add(new WorldStateBinding(new BlockStateId(next), state));
         }
 
         return WorldStateReconciliation.Completed(new WorldStateMap(reconciled));
@@ -209,11 +209,11 @@ public sealed class WorldStateMap
 /// <summary>Defines a deterministic, immutable runtime projection of resolved world states.</summary>
 public sealed class RuntimeStateMap
 {
-    private readonly ImmutableDictionary<WorldStateId, RuntimeStateId> runtimeByWorld;
+    private readonly ImmutableDictionary<BlockStateId, RuntimeStateId> runtimeByWorld;
     private readonly ImmutableDictionary<RuntimeStateId, CanonicalBlockState> stateByRuntime;
 
     private RuntimeStateMap(
-        ImmutableDictionary<WorldStateId, RuntimeStateId> runtimeByWorld,
+        ImmutableDictionary<BlockStateId, RuntimeStateId> runtimeByWorld,
         ImmutableDictionary<RuntimeStateId, CanonicalBlockState> stateByRuntime)
     {
         this.runtimeByWorld = runtimeByWorld;
@@ -259,9 +259,9 @@ public sealed class RuntimeStateMap
         }
 
         CanonicalBlockState[] ordered = [.. resolved.Where(state => !state.Equals(CanonicalBlockState.Air)).OrderBy(state => state)];
-        ImmutableDictionary<WorldStateId, RuntimeStateId>.Builder runtimeBuilder = ImmutableDictionary.CreateBuilder<WorldStateId, RuntimeStateId>();
+        ImmutableDictionary<BlockStateId, RuntimeStateId>.Builder runtimeBuilder = ImmutableDictionary.CreateBuilder<BlockStateId, RuntimeStateId>();
         ImmutableDictionary<RuntimeStateId, CanonicalBlockState>.Builder stateBuilder = ImmutableDictionary.CreateBuilder<RuntimeStateId, CanonicalBlockState>();
-        if (!worldStates.TryGetId(CanonicalBlockState.Air, out WorldStateId airWorldId))
+        if (!worldStates.TryGetId(CanonicalBlockState.Air, out BlockStateId airWorldId))
         {
             throw new ArgumentException("World-state maps must contain vibecraft:air.", nameof(worldStates));
         }
@@ -272,7 +272,7 @@ public sealed class RuntimeStateMap
 
         foreach (CanonicalBlockState state in ordered)
         {
-            if (!worldStates.TryGetId(state, out WorldStateId worldId))
+            if (!worldStates.TryGetId(state, out BlockStateId worldId))
             {
                 continue;
             }
@@ -286,7 +286,7 @@ public sealed class RuntimeStateMap
     }
 
     /// <summary>Attempts to resolve a world-local ID to a runtime ID.</summary>
-    public bool TryResolve(WorldStateId worldId, out RuntimeStateId runtimeId)
+    public bool TryResolve(BlockStateId worldId, out RuntimeStateId runtimeId)
     {
         return runtimeByWorld.TryGetValue(worldId, out runtimeId);
     }

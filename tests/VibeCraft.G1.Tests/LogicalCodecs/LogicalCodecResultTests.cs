@@ -55,7 +55,7 @@ public sealed class LogicalCodecResultTests
         Assert.Equal(10, (byte)LogicalCodecFailureCode.NonCanonicalOrder);
         Assert.Equal(11, (byte)LogicalCodecFailureCode.NonCanonicalPalette);
         Assert.Equal(12, (byte)LogicalCodecFailureCode.IndexOutOfRange);
-        Assert.Equal(13, (byte)LogicalCodecFailureCode.UnmappedWorldState);
+        Assert.Equal(13, (byte)LogicalCodecFailureCode.UnmappedBlockState);
         Assert.Equal(14, (byte)LogicalCodecFailureCode.TrailingData);
         Assert.Equal(15, (byte)LogicalCodecFailureCode.InvalidValue);
 
@@ -63,7 +63,7 @@ public sealed class LogicalCodecResultTests
         Assert.Equal(8, (byte)LogicalCodecField.Header);
         Assert.Equal(9, (byte)LogicalCodecField.Version);
         Assert.Equal(10, (byte)LogicalCodecField.Mapping);
-        Assert.Equal(11, (byte)LogicalCodecField.ContentKey);
+        Assert.Equal(11, (byte)LogicalCodecField.NamespacedContentId);
         Assert.Equal(12, (byte)LogicalCodecField.Property);
         Assert.Equal(13, (byte)LogicalCodecField.Record);
         Assert.Equal(14, (byte)LogicalCodecField.Side);

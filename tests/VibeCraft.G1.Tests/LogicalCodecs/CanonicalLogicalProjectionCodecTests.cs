@@ -59,7 +59,7 @@ public sealed class CanonicalLogicalProjectionCodecTests
     public void EquivalentInputOrdersAndContainerHistoriesProduceIdenticalBytesAndDigests()
     {
         SectionGeometry geometry = SectionGeometry.Side16;
-        WorldStateId[] semantic = States(geometry, 0, 2, 7, 2);
+        BlockStateId[] semantic = States(geometry, 0, 2, 7, 2);
         MutableSectionBlockStates forward = CreateWithHistory(geometry, semantic, Enumerable.Range(0, semantic.Length));
         MutableSectionBlockStates reverse = CreateWithHistory(geometry, semantic, Enumerable.Range(0, semantic.Length).Reverse());
         LogicalSectionInput first = new(Key(9, 4, -2, 3), geometry, Snapshot(forward));
@@ -91,7 +91,7 @@ public sealed class CanonicalLogicalProjectionCodecTests
         LogicalSectionInput changedSection = new(
             original.Sections[0].Key,
             original.Sections[0].Geometry,
-            original.Sections[0].States.Select((state, index) => index == 0 ? new WorldStateId(2) : state),
+            original.Sections[0].States.Select((state, index) => index == 0 ? new BlockStateId(2) : state),
             original.Sections[0].SparseRecords.Select(record => new LogicalSparseInput(record.LocalIndex, record.Type, record.Payload.AsMemory())),
             original.Sections[0].ScheduledTicks);
         CanonicalLogicalProjection changed = CanonicalLogicalProjection.Create(
@@ -263,7 +263,7 @@ public sealed class CanonicalLogicalProjectionCodecTests
         byte[] badKeyText = [.. encoded];
         int mappingBlockText = 18 + 4 + 2;
         badKeyText[mappingBlockText] = (byte)'A';
-        AssertFailure(badKeyText, LogicalCodecFailureCode.InvalidText, LogicalCodecField.ContentKey);
+        AssertFailure(badKeyText, LogicalCodecFailureCode.InvalidText, LogicalCodecField.NamespacedContentId);
 
         byte[] badQueue = [.. encoded];
         int queueOffset = FirstScheduleOffset(encoded);
@@ -330,7 +330,7 @@ public sealed class CanonicalLogicalProjectionCodecTests
 
         byte[] oversizedPayload = [.. encoded];
         int firstSparse = FirstSparseOffset(oversizedPayload) + sizeof(uint);
-        int payloadLengthOffset = SkipContentKey(oversizedPayload, firstSparse + sizeof(ushort));
+        int payloadLengthOffset = SkipNamespacedContentId(oversizedPayload, firstSparse + sizeof(ushort));
         BinaryPrimitives.WriteUInt32BigEndian(
             oversizedPayload.AsSpan(payloadLengthOffset),
             LogicalSparseRecord.MaxPayloadBytes + 1);
@@ -339,8 +339,8 @@ public sealed class CanonicalLogicalProjectionCodecTests
         SectionGeometry geometry = SectionGeometry.Side16;
         LogicalScheduledTick[] ticks =
         [
-            new(LogicalScheduledTickQueueKind.Block, new WorldTick(1), 0, 1, 1, ContentKey.Parse("fixture:same")),
-            new(LogicalScheduledTickQueueKind.Block, new WorldTick(2), 0, 2, 2, ContentKey.Parse("fixture:same")),
+            new(LogicalScheduledTickQueueKind.Block, new WorldTick(1), 0, 1, new LocalIndex(1), NamespacedContentId.Parse("fixture:same")),
+            new(LogicalScheduledTickQueueKind.Block, new WorldTick(2), 0, 2, new LocalIndex(2), NamespacedContentId.Parse("fixture:same")),
         ];
         CanonicalLogicalProjection duplicateIdentityProjection = CanonicalLogicalProjection.Create(
             Map(0),
@@ -382,22 +382,22 @@ public sealed class CanonicalLogicalProjectionCodecTests
         SectionGeometry geometry = SectionGeometry.Side16;
         WorldStateMap map = WorldStateMap.Restore(
         [
-            new WorldStateBinding(new WorldStateId(0), CanonicalBlockState.Air),
+            new WorldStateBinding(new BlockStateId(0), CanonicalBlockState.Air),
             .. Enumerable.Range(1, 256).Select(index => new WorldStateBinding(
-                new WorldStateId(checked((uint)index)),
+                new BlockStateId(checked((uint)index)),
                 new CanonicalBlockState(
-                    ContentKey.Create("fixture", $"state-{index}"),
+                    NamespacedContentId.Create("fixture", $"state-{index}"),
                     index == 1
                         ? [
-                            BlockStateProperty.Create(ContentKey.Create("fixture", "age"), "seven"),
-                            BlockStateProperty.Create(ContentKey.Create("fixture", "lit"), "true"),
+                            BlockStateProperty.Create(NamespacedContentId.Create("fixture", "age"), "seven"),
+                            BlockStateProperty.Create(NamespacedContentId.Create("fixture", "lit"), "true"),
                         ]
                         : []))),
         ]);
-        WorldStateId[] states =
+        BlockStateId[] states =
         [
             .. Enumerable.Range(0, geometry.Side.Value * geometry.Side.Value * geometry.Side.Value)
-                .Select(index => new WorldStateId(checked((uint)(index % 257)))),
+                .Select(index => new BlockStateId(checked((uint)(index % 257)))),
         ];
         return CanonicalLogicalProjection.Create(map, [new(Key(17, 2, -3, 4), geometry, states)]);
     }
@@ -407,19 +407,19 @@ public sealed class CanonicalLogicalProjectionCodecTests
         SectionGeometry geometry = SectionGeometry.Side16;
         LogicalSparseInput[] sparse =
         [
-            new LogicalSparseInput(1024, ContentKey.Parse("fixture:sign"), new byte[] { 0x00, 0x80, 0xff }),
-            new LogicalSparseInput(1, ContentKey.Parse("fixture:chest"), new byte[] { 1, 2, 3, 4 }),
+            new LogicalSparseInput(new LocalIndex(1024), NamespacedContentId.Parse("fixture:sign"), new byte[] { 0x00, 0x80, 0xff }),
+            new LogicalSparseInput(new LocalIndex(1), NamespacedContentId.Parse("fixture:chest"), new byte[] { 1, 2, 3, 4 }),
         ];
         LogicalScheduledTick[] ticks =
         [
-            new LogicalScheduledTick(LogicalScheduledTickQueueKind.Fluid, new WorldTick(9), 3, 50, 17, ContentKey.Parse("fixture:water")),
-            new LogicalScheduledTick(LogicalScheduledTickQueueKind.Block, new WorldTick(9), 3, 6, 18, ContentKey.Parse("fixture:later")),
-            new LogicalScheduledTick(LogicalScheduledTickQueueKind.Block, new WorldTick(9), -3, 5, 19, ContentKey.Parse("fixture:first")),
-            new LogicalScheduledTick(LogicalScheduledTickQueueKind.Block, new WorldTick(2), 0, 4, 20, ContentKey.Parse("fixture:earlier")),
-            new LogicalScheduledTick(LogicalScheduledTickQueueKind.Block, new WorldTick(9), -2, 7, 21, ContentKey.Parse("fixture:minus-two")),
-            new LogicalScheduledTick(LogicalScheduledTickQueueKind.Block, new WorldTick(9), -1, 8, 22, ContentKey.Parse("fixture:minus-one")),
-            new LogicalScheduledTick(LogicalScheduledTickQueueKind.Block, new WorldTick(9), 1, 9, 23, ContentKey.Parse("fixture:one")),
-            new LogicalScheduledTick(LogicalScheduledTickQueueKind.Block, new WorldTick(9), 2, 10, 24, ContentKey.Parse("fixture:two")),
+            new LogicalScheduledTick(LogicalScheduledTickQueueKind.Fluid, new WorldTick(9), 3, 50, new LocalIndex(17), NamespacedContentId.Parse("fixture:water")),
+            new LogicalScheduledTick(LogicalScheduledTickQueueKind.Block, new WorldTick(9), 3, 6, new LocalIndex(18), NamespacedContentId.Parse("fixture:later")),
+            new LogicalScheduledTick(LogicalScheduledTickQueueKind.Block, new WorldTick(9), -3, 5, new LocalIndex(19), NamespacedContentId.Parse("fixture:first")),
+            new LogicalScheduledTick(LogicalScheduledTickQueueKind.Block, new WorldTick(2), 0, 4, new LocalIndex(20), NamespacedContentId.Parse("fixture:earlier")),
+            new LogicalScheduledTick(LogicalScheduledTickQueueKind.Block, new WorldTick(9), -2, 7, new LocalIndex(21), NamespacedContentId.Parse("fixture:minus-two")),
+            new LogicalScheduledTick(LogicalScheduledTickQueueKind.Block, new WorldTick(9), -1, 8, new LocalIndex(22), NamespacedContentId.Parse("fixture:minus-one")),
+            new LogicalScheduledTick(LogicalScheduledTickQueueKind.Block, new WorldTick(9), 1, 9, new LocalIndex(23), NamespacedContentId.Parse("fixture:one")),
+            new LogicalScheduledTick(LogicalScheduledTickQueueKind.Block, new WorldTick(9), 2, 10, new LocalIndex(24), NamespacedContentId.Parse("fixture:two")),
         ];
         return CanonicalLogicalProjection.Create(
             Map(0, 2, 7),
@@ -447,10 +447,10 @@ public sealed class CanonicalLogicalProjectionCodecTests
                 .Distinct()
                 .OrderBy(id => id)
                 .Select(id => new WorldStateBinding(
-                    new WorldStateId(id),
+                    new BlockStateId(id),
                     id == 0
                         ? CanonicalBlockState.Air
-                        : new CanonicalBlockState(ContentKey.Create("fixture", $"state-{id}"), []))),
+                        : new CanonicalBlockState(NamespacedContentId.Create("fixture", $"state-{id}"), []))),
         ]);
     }
 
@@ -459,33 +459,33 @@ public sealed class CanonicalLogicalProjectionCodecTests
         return new LogicalRecordKey(LogicalRecordKind.SectionState, new DimensionId(dimension), new SectionCoord(x, y, z));
     }
 
-    private static WorldStateId[] States(SectionGeometry geometry, params uint[] pattern)
+    private static BlockStateId[] States(SectionGeometry geometry, params uint[] pattern)
     {
         return
         [
             .. Enumerable.Range(0, geometry.Side.Value * geometry.Side.Value * geometry.Side.Value)
-                .Select(index => new WorldStateId(pattern[index % pattern.Length])),
+                .Select(index => new BlockStateId(pattern[index % pattern.Length])),
         ];
     }
 
-    private static MutableSectionBlockStates CreateWithHistory(SectionGeometry geometry, WorldStateId[] semantic, IEnumerable<int> order)
+    private static MutableSectionBlockStates CreateWithHistory(SectionGeometry geometry, BlockStateId[] semantic, IEnumerable<int> order)
     {
         MutableSectionBlockStates section = new(geometry, semantic[0], default);
         foreach (int index in order)
         {
             if (semantic[index] != semantic[0])
             {
-                Assert.Equal(SectionWriteResult.Changed, section.TrySet(SectionCandidateFixture.ToLocal(index, geometry.Side.Value), semantic[index]));
+                Assert.Equal(SectionWriteResult.Changed, section.TrySet(SectionCandidateFixture.ToLocal(new LocalIndex(index), geometry), semantic[index]));
             }
         }
 
         return section;
     }
 
-    private static WorldStateId[] Snapshot(MutableSectionBlockStates section)
+    private static BlockStateId[] Snapshot(MutableSectionBlockStates section)
     {
         SectionBlockStateSnapshot snapshot = section.CaptureSnapshot();
-        WorldStateId[] states = new WorldStateId[snapshot.Count];
+        BlockStateId[] states = new BlockStateId[snapshot.Count];
         snapshot.CopyTo(states);
         return states;
     }
@@ -519,12 +519,12 @@ public sealed class CanonicalLogicalProjectionCodecTests
         for (int mappingIndex = 0; mappingIndex < mappingCount; mappingIndex++)
         {
             offset += 4;
-            offset = SkipContentKey(bytes, offset);
+            offset = SkipNamespacedContentId(bytes, offset);
             ushort properties = ReadUInt16(bytes, offset);
             offset += 2;
             for (int propertyIndex = 0; propertyIndex < properties; propertyIndex++)
             {
-                offset = SkipContentKey(bytes, offset);
+                offset = SkipNamespacedContentId(bytes, offset);
                 offset += 2 + ReadUInt16(bytes, offset);
             }
         }
@@ -535,12 +535,12 @@ public sealed class CanonicalLogicalProjectionCodecTests
     private static int NextMappingOffset(byte[] bytes, int offset)
     {
         int cursor = offset + 4;
-        cursor = SkipContentKey(bytes, cursor);
+        cursor = SkipNamespacedContentId(bytes, cursor);
         ushort properties = ReadUInt16(bytes, cursor);
         cursor += 2;
         for (int propertyIndex = 0; propertyIndex < properties; propertyIndex++)
         {
-            cursor = SkipContentKey(bytes, cursor);
+            cursor = SkipNamespacedContentId(bytes, cursor);
             cursor += 2 + ReadUInt16(bytes, cursor);
         }
 
@@ -559,7 +559,7 @@ public sealed class CanonicalLogicalProjectionCodecTests
         for (int index = 0; index < sparse; index++)
         {
             cursor += 2;
-            cursor = SkipContentKey(bytes, cursor);
+            cursor = SkipNamespacedContentId(bytes, cursor);
             cursor += 4 + checked((int)ReadUInt32(bytes, cursor));
         }
 
@@ -568,7 +568,7 @@ public sealed class CanonicalLogicalProjectionCodecTests
         for (int index = 0; index < schedules; index++)
         {
             cursor += 1 + 8 + 1 + 8 + 2;
-            cursor = SkipContentKey(bytes, cursor);
+            cursor = SkipNamespacedContentId(bytes, cursor);
         }
 
         return cursor;
@@ -586,7 +586,7 @@ public sealed class CanonicalLogicalProjectionCodecTests
     private static int NextSparseOffset(byte[] bytes, int offset)
     {
         int cursor = offset + 2;
-        cursor = SkipContentKey(bytes, cursor);
+        cursor = SkipNamespacedContentId(bytes, cursor);
         return cursor + 4 + checked((int)ReadUInt32(bytes, cursor));
     }
 
@@ -605,10 +605,10 @@ public sealed class CanonicalLogicalProjectionCodecTests
 
     private static int NextScheduleOffset(byte[] bytes, int offset)
     {
-        return SkipContentKey(bytes, offset + 1 + 8 + 1 + 8 + 2);
+        return SkipNamespacedContentId(bytes, offset + 1 + 8 + 1 + 8 + 2);
     }
 
-    private static int SkipContentKey(byte[] bytes, int offset)
+    private static int SkipNamespacedContentId(byte[] bytes, int offset)
     {
         return offset + 2 + ReadUInt16(bytes, offset) + 2 + ReadUInt16(bytes, offset + 2 + ReadUInt16(bytes, offset));
     }
