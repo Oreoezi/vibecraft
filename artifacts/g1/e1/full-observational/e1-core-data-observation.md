@@ -26,12 +26,12 @@ Reason for overall defer: G0 owner acceptance of the benchmark host, runtime, GC
 | positive-measured-durations | pass | Every paired duration was positive; no equality ratio was synthesized. |
 | adaptive-memory-one-side32 | pass | homogeneous-layered-mixed upper95=0.090005 (limit 0.50); highentropy upper95=1.000793 (limit 1.10) |
 | adaptive-memory-eight-side16 | pass | homogeneous-layered-mixed upper95=0.120902 (limit 0.50); highentropy upper95=1.006346 (limit 1.10) |
-| adaptive-timing-one-side32 | fail | Maximum upper95 adaptive/dense ratio across random read, linear read, interior edits, and boundary edits is 273.944647 (limit 1.15). |
-| adaptive-timing-eight-side16 | fail | Maximum upper95 adaptive/dense ratio across random read, linear read, interior edits, and boundary edits is 69.232238 (limit 1.15). |
+| adaptive-timing-one-side32 | fail | Maximum upper95 adaptive/dense ratio across random read, linear read, interior edits, and boundary edits is 273.196319 (limit 1.15). |
+| adaptive-timing-eight-side16 | fail | Maximum upper95 adaptive/dense ratio across random read, linear read, interior edits, and boundary edits is 68.621421 (limit 1.15). |
 | side32-memory | fail | Balanced upper95 side32/side16 retained-memory ratio is 0.928240 (limit 0.80). |
-| side32-primary | fail | 0 of five retained-memory/read/edit/snapshot/projection upper95 side32/side16 ratios are <= 0.80; maximum upper95 is 4.691369 (limit 1.15). |
+| side32-primary | fail | 0 of five retained-memory/read/edit/snapshot/projection upper95 side32/side16 ratios are <= 0.80; maximum upper95 is 4.671214 (limit 1.15). |
 | side32-amplification | fail | Maximum p95 candidate/reference ratio across canonical logical-projection bytes and unique remesh-halo samples is 8.079583 (limit 2.0). |
-| side16-primary | pass | Equal-weight geometric mean of five median side16/side32 ratios is 0.804959 (limit 1.15); maximum upper95 is 1.241194 (limit 1.25). |
+| side16-primary | pass | Equal-weight geometric mean of five median side16/side32 ratios is 0.775516 (limit 1.15); maximum upper95 is 1.077307 (limit 1.25). |
 | side16-amplification | pass | Maximum p95 candidate/reference ratio across canonical logical-projection bytes and unique remesh-halo samples is 1.000276 (limit 2.0). |
 | save-and-network-amplification | inconclusive | No G1 save format or network encoding exists to measure. Canonical logical-projection bytes are retained as a representation-neutral republish proxy and are not relabeled as storage or wire evidence. |
 | g0-owner-acceptance | blocked | No owner acceptance exists for this host, runtime, GC mode, power mode, or the applicable G0 product budgets. |
@@ -42,110 +42,110 @@ Reason for overall defer: G0 owner acceptance of the benchmark host, runtime, GC
 
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
 
-| adaptive-vs-dense/clustered-edit/boundary/eight-side16 | 1536 | 256 | 65.547190 | 48.493638 | 53.586161–69.232238 | paired lower-is-better adaptive/dense duration ratio |
-| adaptive-vs-dense/clustered-edit/boundary/one-side32 | 1536 | 256 | 213.647947 | 181.449228 | 121.793491–271.095617 | paired lower-is-better adaptive/dense duration ratio |
-| adaptive-vs-dense/clustered-edit/interior/eight-side16 | 1536 | 256 | 35.994483 | 24.200297 | 21.067881–47.614927 | paired lower-is-better adaptive/dense duration ratio |
-| adaptive-vs-dense/clustered-edit/interior/one-side32 | 1536 | 256 | 191.150188 | 175.224449 | 113.041888–273.944647 | paired lower-is-better adaptive/dense duration ratio |
-| adaptive-vs-dense/linear-read/eight-side16 | 1536 | 256 | 19.408974 | 0.551989 | 19.282472–19.579878 | paired lower-is-better adaptive/dense duration ratio |
-| adaptive-vs-dense/linear-read/one-side32 | 1536 | 256 | 18.975470 | 0.541980 | 18.804413–19.217671 | paired lower-is-better adaptive/dense duration ratio |
-| adaptive-vs-dense/random-read/eight-side16 | 1536 | 256 | 20.011714 | 1.190521 | 19.295787–20.664687 | paired lower-is-better adaptive/dense duration ratio |
-| adaptive-vs-dense/random-read/one-side32 | 1536 | 256 | 19.085876 | 0.625964 | 18.769581–19.414247 | paired lower-is-better adaptive/dense duration ratio |
-| distribution/highentropy/adaptive-vs-dense/clustered-edit/boundary/eight-side16 | 384 | 64 | 2.288541 | 0.169845 | 2.238606–2.407211 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/highentropy/adaptive-vs-dense/clustered-edit/boundary/one-side32 | 384 | 64 | 1.761338 | 0.036752 | 1.740721–1.777837 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/highentropy/adaptive-vs-dense/clustered-edit/interior/eight-side16 | 384 | 64 | 2.002295 | 0.137181 | 1.973328–2.047202 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/highentropy/adaptive-vs-dense/clustered-edit/interior/one-side32 | 384 | 64 | 1.760456 | 0.042117 | 1.740721–1.769375 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/highentropy/adaptive-vs-dense/linear-read/eight-side16 | 384 | 64 | 18.733119 | 0.116935 | 18.658257–18.776488 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/highentropy/adaptive-vs-dense/linear-read/one-side32 | 384 | 64 | 18.199767 | 0.133281 | 18.138322–18.233247 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/highentropy/adaptive-vs-dense/random-read/eight-side16 | 384 | 64 | 18.705166 | 0.176910 | 18.635990–18.772544 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/highentropy/adaptive-vs-dense/random-read/one-side32 | 384 | 64 | 18.241540 | 0.112937 | 18.217596–18.308536 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/highentropy/section-side-reciprocal/clustered-edit/boundary | 384 | 64 | 1.243065 | 0.084108 | 1.208028–1.271438 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/highentropy/section-side-reciprocal/clustered-edit/interior | 384 | 64 | 1.127953 | 0.056937 | 1.084983–1.145921 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/highentropy/section-side-reciprocal/linear-read | 384 | 64 | 1.026336 | 0.004139 | 1.023572–1.028095 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/highentropy/section-side-reciprocal/logical-projection | 384 | 64 | 1.064553 | 0.015987 | 1.058216–1.072205 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/highentropy/section-side-reciprocal/random-read | 384 | 64 | 1.028901 | 0.004823 | 1.026325–1.030384 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/highentropy/section-side-reciprocal/snapshot | 384 | 64 | 5.863100 | 0.358490 | 5.628167–6.041159 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/highentropy/section-side/clustered-edit/boundary | 384 | 64 | 0.807658 | 0.056297 | 0.786854–0.828603 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/highentropy/section-side/clustered-edit/interior | 384 | 64 | 0.893543 | 0.042937 | 0.872218–0.926962 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/highentropy/section-side/linear-read | 384 | 64 | 0.974348 | 0.003944 | 0.972877–0.976975 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/highentropy/section-side/logical-projection | 384 | 64 | 0.939425 | 0.014403 | 0.933300–0.944850 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/highentropy/section-side/random-read | 384 | 64 | 0.971912 | 0.004650 | 0.970522–0.974364 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/highentropy/section-side/snapshot | 384 | 64 | 0.171225 | 0.010521 | 0.166111–0.178296 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/homogeneous/adaptive-vs-dense/clustered-edit/boundary/eight-side16 | 384 | 64 | 177.348414 | 2.367481 | 176.933398–178.808172 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/homogeneous/adaptive-vs-dense/clustered-edit/boundary/one-side32 | 384 | 64 | 461.094783 | 7.011638 | 458.452884–462.972296 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/homogeneous/adaptive-vs-dense/clustered-edit/interior/eight-side16 | 384 | 64 | 62.806806 | 0.938453 | 62.291411–63.291470 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/homogeneous/adaptive-vs-dense/clustered-edit/interior/one-side32 | 384 | 64 | 462.829598 | 7.987969 | 457.926564–467.066475 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/homogeneous/adaptive-vs-dense/linear-read/eight-side16 | 384 | 64 | 19.188821 | 0.102304 | 19.140663–19.259629 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/homogeneous/adaptive-vs-dense/linear-read/one-side32 | 384 | 64 | 18.745100 | 0.102952 | 18.666877–18.785552 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/homogeneous/adaptive-vs-dense/random-read/eight-side16 | 384 | 64 | 19.156973 | 0.133408 | 19.099659–19.215637 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/homogeneous/adaptive-vs-dense/random-read/one-side32 | 384 | 64 | 18.694209 | 0.073329 | 18.654264–18.715007 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/homogeneous/section-side-reciprocal/clustered-edit/boundary | 384 | 64 | 0.386404 | 0.003704 | 0.384701–0.388324 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/homogeneous/section-side-reciprocal/clustered-edit/interior | 384 | 64 | 0.135783 | 0.001532 | 0.135040–0.136483 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/homogeneous/section-side-reciprocal/linear-read | 384 | 64 | 1.026439 | 0.004344 | 1.024291–1.029590 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/homogeneous/section-side-reciprocal/logical-projection | 384 | 64 | 0.969174 | 0.066996 | 0.925078–1.017619 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/homogeneous/section-side-reciprocal/random-read | 384 | 64 | 1.027287 | 0.005173 | 1.024866–1.029580 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/homogeneous/section-side-reciprocal/snapshot | 384 | 64 | 1.317518 | 0.109662 | 1.276427–1.414148 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/homogeneous/section-side/clustered-edit/boundary | 384 | 64 | 2.588333 | 0.025180 | 2.575350–2.599713 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/homogeneous/section-side/clustered-edit/interior | 384 | 64 | 7.365991 | 0.082838 | 7.328857–7.405071 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/homogeneous/section-side/linear-read | 384 | 64 | 0.974319 | 0.004117 | 0.971281–0.976294 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/homogeneous/section-side/logical-projection | 384 | 64 | 1.034351 | 0.069113 | 0.982740–1.081042 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/homogeneous/section-side/random-read | 384 | 64 | 0.973440 | 0.004907 | 0.971279–0.975781 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/homogeneous/section-side/snapshot | 384 | 64 | 0.760520 | 0.061854 | 0.709720–0.796663 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/layered/adaptive-vs-dense/clustered-edit/boundary/eight-side16 | 384 | 64 | 69.871627 | 0.926253 | 69.487317–70.204800 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/layered/adaptive-vs-dense/clustered-edit/boundary/one-side32 | 384 | 64 | 276.464619 | 5.487905 | 274.403276–279.949405 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/layered/adaptive-vs-dense/clustered-edit/interior/eight-side16 | 384 | 64 | 48.092964 | 0.636760 | 47.843742–48.403785 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/layered/adaptive-vs-dense/clustered-edit/interior/one-side32 | 384 | 64 | 280.235086 | 4.332109 | 276.747558–281.975345 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/layered/adaptive-vs-dense/linear-read/eight-side16 | 384 | 64 | 19.673639 | 0.102901 | 19.622175–19.724200 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/layered/adaptive-vs-dense/linear-read/one-side32 | 384 | 64 | 19.505032 | 0.090895 | 19.470471–19.533722 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/layered/adaptive-vs-dense/random-read/eight-side16 | 384 | 64 | 24.219124 | 0.134141 | 24.183435–24.308668 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/layered/adaptive-vs-dense/random-read/one-side32 | 384 | 64 | 19.531051 | 0.105703 | 19.510737–19.581365 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/layered/section-side-reciprocal/clustered-edit/boundary | 384 | 64 | 0.251812 | 0.003198 | 0.249823–0.253797 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/layered/section-side-reciprocal/clustered-edit/interior | 384 | 64 | 0.172146 | 0.001713 | 0.171316–0.173394 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/layered/section-side-reciprocal/linear-read | 384 | 64 | 1.008521 | 0.005171 | 1.005846–1.010487 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/layered/section-side-reciprocal/logical-projection | 384 | 64 | 0.847534 | 0.011759 | 0.842047–0.851156 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/layered/section-side-reciprocal/random-read | 384 | 64 | 1.239240 | 0.005996 | 1.236693–1.242706 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/layered/section-side-reciprocal/snapshot | 384 | 64 | 0.828599 | 0.023904 | 0.819794–0.840612 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/layered/section-side/clustered-edit/boundary | 384 | 64 | 3.971228 | 0.050601 | 3.941729–4.004265 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/layered/section-side/clustered-edit/interior | 384 | 64 | 5.809029 | 0.058013 | 5.767658–5.837165 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/layered/section-side/linear-read | 384 | 64 | 0.991555 | 0.005113 | 0.989653–0.994191 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/layered/section-side/logical-projection | 384 | 64 | 1.183425 | 0.016608 | 1.176925–1.195428 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/layered/section-side/random-read | 384 | 64 | 0.806963 | 0.003908 | 0.804708–0.808641 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/layered/section-side/snapshot | 384 | 64 | 1.207168 | 0.030752 | 1.191345–1.221084 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/mixed/adaptive-vs-dense/clustered-edit/boundary/eight-side16 | 384 | 64 | 51.358764 | 1.688361 | 50.850396–52.567869 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/mixed/adaptive-vs-dense/clustered-edit/boundary/one-side32 | 384 | 64 | 112.746057 | 6.599662 | 109.631907–114.943840 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/mixed/adaptive-vs-dense/clustered-edit/interior/eight-side16 | 384 | 64 | 19.352069 | 0.914619 | 18.879886–19.735675 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/mixed/adaptive-vs-dense/clustered-edit/interior/one-side32 | 384 | 64 | 108.756227 | 4.239746 | 106.791661–110.268072 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/mixed/adaptive-vs-dense/linear-read/eight-side16 | 384 | 64 | 20.521787 | 0.135404 | 20.431734–20.582394 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/mixed/adaptive-vs-dense/linear-read/one-side32 | 384 | 64 | 19.557546 | 0.233161 | 19.486500–19.673763 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/mixed/adaptive-vs-dense/random-read/eight-side16 | 384 | 64 | 20.789698 | 0.174320 | 20.744951–20.889274 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/mixed/adaptive-vs-dense/random-read/one-side32 | 384 | 64 | 20.088640 | 0.121892 | 20.027814–20.138498 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/mixed/section-side-reciprocal/clustered-edit/boundary | 384 | 64 | 0.385172 | 0.031253 | 0.373578–0.393554 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/mixed/section-side-reciprocal/clustered-edit/interior | 384 | 64 | 0.170837 | 0.005472 | 0.168287–0.172484 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/mixed/section-side-reciprocal/linear-read | 384 | 64 | 1.043046 | 0.005794 | 1.040506–1.045782 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/mixed/section-side-reciprocal/logical-projection | 384 | 64 | 1.017646 | 0.033334 | 1.003857–1.035092 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/mixed/section-side-reciprocal/random-read | 384 | 64 | 1.037007 | 0.005803 | 1.034927–1.038944 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/mixed/section-side-reciprocal/snapshot | 384 | 64 | 1.152064 | 0.024935 | 1.141756–1.158143 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/mixed/section-side/clustered-edit/boundary | 384 | 64 | 2.662257 | 0.228916 | 2.614556–2.750533 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/mixed/section-side/clustered-edit/interior | 384 | 64 | 5.854166 | 0.182070 | 5.799110–5.943082 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/mixed/section-side/linear-read | 384 | 64 | 0.958762 | 0.005317 | 0.956264–0.961141 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/mixed/section-side/logical-projection | 384 | 64 | 0.987709 | 0.031623 | 0.967138–1.001098 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/mixed/section-side/random-read | 384 | 64 | 0.964330 | 0.005399 | 0.962519–0.966257 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| distribution/mixed/section-side/snapshot | 384 | 64 | 0.868269 | 0.019041 | 0.863497–0.875946 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
-| section-side-reciprocal/clustered-edit | 3072 | 256 | 0.255568 | 0.040105 | 0.250146–0.257845 | paired lower-is-better side16/side32 duration ratio |
-| section-side-reciprocal/clustered-edit/boundary | 1536 | 256 | 0.386014 | 0.122342 | 0.383441–0.388939 | paired lower-is-better side16/side32 duration ratio |
-| section-side-reciprocal/clustered-edit/interior | 1536 | 256 | 0.171732 | 0.034385 | 0.171011–0.172879 | paired lower-is-better side16/side32 duration ratio |
-| section-side-reciprocal/linear-read | 1536 | 256 | 1.026244 | 0.011046 | 1.024065–1.028291 | paired lower-is-better side16/side32 duration ratio |
-| section-side-reciprocal/logical-projection | 1536 | 256 | 1.005504 | 0.068679 | 0.982938–1.028190 | paired lower-is-better side16/side32 duration ratio |
-| section-side-reciprocal/random-read | 1536 | 256 | 1.035127 | 0.010520 | 1.032453–1.037339 | paired lower-is-better side16/side32 duration ratio |
-| section-side-reciprocal/read | 3072 | 256 | 1.034254 | 0.009056 | 1.032273–1.037241 | paired lower-is-better side16/side32 duration ratio |
-| section-side-reciprocal/snapshot | 1536 | 256 | 1.180358 | 0.287726 | 1.156839–1.241194 | paired lower-is-better side16/side32 duration ratio |
-| section-side/clustered-edit | 3072 | 256 | 4.619872 | 0.334297 | 4.531604–4.691369 | paired lower-is-better one-side32/eight-side16 duration ratio |
-| section-side/clustered-edit/boundary | 1536 | 256 | 2.601029 | 1.191603 | 2.583584–2.622783 | paired lower-is-better one-side32/eight-side16 duration ratio |
-| section-side/clustered-edit/interior | 1536 | 256 | 5.823192 | 1.458138 | 5.785806–5.848755 | paired lower-is-better one-side32/eight-side16 duration ratio |
-| section-side/linear-read | 1536 | 256 | 0.974462 | 0.010561 | 0.972608–0.976508 | paired lower-is-better one-side32/eight-side16 duration ratio |
-| section-side/logical-projection | 1536 | 256 | 0.996611 | 0.068990 | 0.974210–1.017692 | paired lower-is-better one-side32/eight-side16 duration ratio |
-| section-side/random-read | 1536 | 256 | 0.966069 | 0.009830 | 0.963951–0.968621 | paired lower-is-better one-side32/eight-side16 duration ratio |
-| section-side/read | 3072 | 256 | 0.966882 | 0.008466 | 0.964102–0.968736 | paired lower-is-better one-side32/eight-side16 duration ratio |
-| section-side/snapshot | 1536 | 256 | 0.847202 | 0.204149 | 0.808843–0.864560 | paired lower-is-better one-side32/eight-side16 duration ratio |
+| adaptive-vs-dense/clustered-edit/boundary/eight-side16 | 1536 | 256 | 66.418714 | 46.743524 | 54.914297–68.621421 | paired lower-is-better adaptive/dense duration ratio |
+| adaptive-vs-dense/clustered-edit/boundary/one-side32 | 1536 | 256 | 195.807926 | 180.854252 | 112.004772–273.196319 | paired lower-is-better adaptive/dense duration ratio |
+| adaptive-vs-dense/clustered-edit/interior/eight-side16 | 1536 | 256 | 34.587311 | 24.190602 | 21.268277–47.130220 | paired lower-is-better adaptive/dense duration ratio |
+| adaptive-vs-dense/clustered-edit/interior/one-side32 | 1536 | 256 | 206.960606 | 171.558234 | 117.887124–270.880420 | paired lower-is-better adaptive/dense duration ratio |
+| adaptive-vs-dense/linear-read/eight-side16 | 1536 | 256 | 19.462155 | 0.520656 | 19.330163–19.622146 | paired lower-is-better adaptive/dense duration ratio |
+| adaptive-vs-dense/linear-read/one-side32 | 1536 | 256 | 19.068675 | 0.531358 | 18.822243–19.328918 | paired lower-is-better adaptive/dense duration ratio |
+| adaptive-vs-dense/random-read/eight-side16 | 1536 | 256 | 20.154859 | 1.355431 | 19.370626–20.772547 | paired lower-is-better adaptive/dense duration ratio |
+| adaptive-vs-dense/random-read/one-side32 | 1536 | 256 | 19.006828 | 0.668162 | 18.753837–19.251405 | paired lower-is-better adaptive/dense duration ratio |
+| distribution/highentropy/adaptive-vs-dense/clustered-edit/boundary/eight-side16 | 384 | 64 | 2.045725 | 0.181451 | 1.983008–2.160279 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/highentropy/adaptive-vs-dense/clustered-edit/boundary/one-side32 | 384 | 64 | 1.711652 | 0.062679 | 1.666490–1.728469 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/highentropy/adaptive-vs-dense/clustered-edit/interior/eight-side16 | 384 | 64 | 1.866343 | 0.098631 | 1.811086–1.889681 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/highentropy/adaptive-vs-dense/clustered-edit/interior/one-side32 | 384 | 64 | 1.696534 | 0.067235 | 1.643634–1.727610 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/highentropy/adaptive-vs-dense/linear-read/eight-side16 | 384 | 64 | 18.767242 | 0.126597 | 18.725718–18.837053 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/highentropy/adaptive-vs-dense/linear-read/one-side32 | 384 | 64 | 18.228913 | 0.135579 | 18.160955–18.283133 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/highentropy/adaptive-vs-dense/random-read/eight-side16 | 384 | 64 | 18.681949 | 0.122867 | 18.640834–18.737304 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/highentropy/adaptive-vs-dense/random-read/one-side32 | 384 | 64 | 18.205626 | 0.144398 | 18.168973–18.262760 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/highentropy/section-side-reciprocal/clustered-edit/boundary | 384 | 64 | 1.232443 | 0.082945 | 1.202062–1.247257 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/highentropy/section-side-reciprocal/clustered-edit/interior | 384 | 64 | 1.094268 | 0.062914 | 1.072362–1.135442 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/highentropy/section-side-reciprocal/linear-read | 384 | 64 | 1.026925 | 0.003423 | 1.025668–1.027728 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/highentropy/section-side-reciprocal/logical-projection | 384 | 64 | 1.064271 | 0.013074 | 1.058954–1.071885 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/highentropy/section-side-reciprocal/random-read | 384 | 64 | 1.027928 | 0.006695 | 1.026492–1.030839 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/highentropy/section-side-reciprocal/snapshot | 384 | 64 | 6.084631 | 0.348489 | 5.907095–6.177118 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/highentropy/section-side/clustered-edit/boundary | 384 | 64 | 0.814904 | 0.054887 | 0.803633–0.835609 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/highentropy/section-side/clustered-edit/interior | 384 | 64 | 0.918078 | 0.053480 | 0.882226–0.936431 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/highentropy/section-side/linear-read | 384 | 64 | 0.973786 | 0.003270 | 0.973181–0.974977 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/highentropy/section-side/logical-projection | 384 | 64 | 0.940099 | 0.011438 | 0.933089–0.944235 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/highentropy/section-side/random-read | 384 | 64 | 0.972855 | 0.006321 | 0.970089–0.974198 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/highentropy/section-side/snapshot | 384 | 64 | 0.164364 | 0.008845 | 0.161928–0.169530 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/homogeneous/adaptive-vs-dense/clustered-edit/boundary/eight-side16 | 384 | 64 | 177.408152 | 3.263484 | 176.534464–179.572572 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/homogeneous/adaptive-vs-dense/clustered-edit/boundary/one-side32 | 384 | 64 | 463.115097 | 6.562219 | 459.688017–465.444062 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/homogeneous/adaptive-vs-dense/clustered-edit/interior/eight-side16 | 384 | 64 | 63.346936 | 1.308289 | 62.742320–64.121371 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/homogeneous/adaptive-vs-dense/clustered-edit/interior/one-side32 | 384 | 64 | 456.857921 | 8.009853 | 453.293333–464.070457 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/homogeneous/adaptive-vs-dense/linear-read/eight-side16 | 384 | 64 | 19.238884 | 0.106544 | 19.196737–19.285323 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/homogeneous/adaptive-vs-dense/linear-read/one-side32 | 384 | 64 | 18.699318 | 0.120335 | 18.673532–18.773326 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/homogeneous/adaptive-vs-dense/random-read/eight-side16 | 384 | 64 | 19.143008 | 0.227297 | 19.073205–19.228903 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/homogeneous/adaptive-vs-dense/random-read/one-side32 | 384 | 64 | 18.666930 | 0.120944 | 18.584824–18.721934 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/homogeneous/section-side-reciprocal/clustered-edit/boundary | 384 | 64 | 0.383430 | 0.004314 | 0.381316–0.386118 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/homogeneous/section-side-reciprocal/clustered-edit/interior | 384 | 64 | 0.135629 | 0.002012 | 0.134896–0.137412 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/homogeneous/section-side-reciprocal/linear-read | 384 | 64 | 1.024515 | 0.004832 | 1.022859–1.026601 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/homogeneous/section-side-reciprocal/logical-projection | 384 | 64 | 0.835587 | 0.070645 | 0.806880–0.895864 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/homogeneous/section-side-reciprocal/random-read | 384 | 64 | 1.029453 | 0.004755 | 1.026951–1.031623 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/homogeneous/section-side-reciprocal/snapshot | 384 | 64 | 0.953817 | 0.073098 | 0.841898–0.991542 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/homogeneous/section-side/clustered-edit/boundary | 384 | 64 | 2.608084 | 0.029695 | 2.589962–2.622501 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/homogeneous/section-side/clustered-edit/interior | 384 | 64 | 7.373149 | 0.106199 | 7.278399–7.412473 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/homogeneous/section-side/linear-read | 384 | 64 | 0.976087 | 0.004610 | 0.974090–0.977664 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/homogeneous/section-side/logical-projection | 384 | 64 | 1.196861 | 0.099173 | 1.117771–1.239553 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/homogeneous/section-side/random-read | 384 | 64 | 0.971392 | 0.004510 | 0.969472–0.973793 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/homogeneous/section-side/snapshot | 384 | 64 | 1.048772 | 0.078520 | 1.008667–1.193937 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/layered/adaptive-vs-dense/clustered-edit/boundary/eight-side16 | 384 | 64 | 69.454799 | 1.076683 | 68.991782–70.230382 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/layered/adaptive-vs-dense/clustered-edit/boundary/one-side32 | 384 | 64 | 276.718999 | 4.589702 | 275.503884–279.682937 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/layered/adaptive-vs-dense/clustered-edit/interior/eight-side16 | 384 | 64 | 48.081169 | 0.864934 | 47.630133–48.488409 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/layered/adaptive-vs-dense/clustered-edit/interior/one-side32 | 384 | 64 | 276.615923 | 4.765549 | 273.447419–279.031888 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/layered/adaptive-vs-dense/linear-read/eight-side16 | 384 | 64 | 19.693599 | 0.100414 | 19.657744–19.727810 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/layered/adaptive-vs-dense/linear-read/one-side32 | 384 | 64 | 19.533345 | 0.115956 | 19.478385–19.578230 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/layered/adaptive-vs-dense/random-read/eight-side16 | 384 | 64 | 24.276614 | 0.142274 | 24.187254–24.311313 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/layered/adaptive-vs-dense/random-read/one-side32 | 384 | 64 | 19.548981 | 0.133417 | 19.490874–19.615732 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/layered/section-side-reciprocal/clustered-edit/boundary | 384 | 64 | 0.251883 | 0.003785 | 0.249880–0.254663 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/layered/section-side-reciprocal/clustered-edit/interior | 384 | 64 | 0.172429 | 0.001985 | 0.172035–0.173608 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/layered/section-side-reciprocal/linear-read | 384 | 64 | 1.009343 | 0.006602 | 1.006335–1.010839 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/layered/section-side-reciprocal/logical-projection | 384 | 64 | 0.848978 | 0.018087 | 0.839142–0.859100 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/layered/section-side-reciprocal/random-read | 384 | 64 | 1.237811 | 0.006798 | 1.234744–1.241799 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/layered/section-side-reciprocal/snapshot | 384 | 64 | 0.621226 | 0.013083 | 0.614125–0.628079 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/layered/section-side/clustered-edit/boundary | 384 | 64 | 3.970451 | 0.059146 | 3.928758–4.002329 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/layered/section-side/clustered-edit/interior | 384 | 64 | 5.799932 | 0.066270 | 5.760224–5.813245 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/layered/section-side/linear-read | 384 | 64 | 0.990768 | 0.006477 | 0.989504–0.993719 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/layered/section-side/logical-projection | 384 | 64 | 1.177912 | 0.024996 | 1.164450–1.191919 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/layered/section-side/random-read | 384 | 64 | 0.807880 | 0.004439 | 0.805297–0.809933 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/layered/section-side/snapshot | 384 | 64 | 1.610161 | 0.034287 | 1.593514–1.628916 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/mixed/adaptive-vs-dense/clustered-edit/boundary/eight-side16 | 384 | 64 | 51.560807 | 2.591954 | 50.421368–52.451734 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/mixed/adaptive-vs-dense/clustered-edit/boundary/one-side32 | 384 | 64 | 108.496156 | 4.822000 | 105.316411–109.491307 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/mixed/adaptive-vs-dense/clustered-edit/interior/eight-side16 | 384 | 64 | 19.656477 | 1.090759 | 19.146861–20.150850 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/mixed/adaptive-vs-dense/clustered-edit/interior/one-side32 | 384 | 64 | 109.932792 | 6.365252 | 106.727996–112.702960 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/mixed/adaptive-vs-dense/linear-read/eight-side16 | 384 | 64 | 20.469003 | 0.115207 | 20.418647–20.531012 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/mixed/adaptive-vs-dense/linear-read/one-side32 | 384 | 64 | 19.671541 | 0.234681 | 19.530183–19.775864 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/mixed/adaptive-vs-dense/random-read/eight-side16 | 384 | 64 | 20.912934 | 0.110409 | 20.835803–20.964806 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/mixed/adaptive-vs-dense/random-read/one-side32 | 384 | 64 | 20.245232 | 0.190621 | 20.183217–20.325590 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/mixed/section-side-reciprocal/clustered-edit/boundary | 384 | 64 | 0.452871 | 0.015182 | 0.445879–0.457496 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/mixed/section-side-reciprocal/clustered-edit/interior | 384 | 64 | 0.116160 | 0.005719 | 0.114448–0.119134 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/mixed/section-side-reciprocal/linear-read | 384 | 64 | 1.041430 | 0.009601 | 1.038356–1.046199 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/mixed/section-side-reciprocal/logical-projection | 384 | 64 | 1.042653 | 0.011394 | 1.038461–1.046715 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/mixed/section-side-reciprocal/random-read | 384 | 64 | 1.030423 | 0.012538 | 1.023495–1.035410 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/mixed/section-side-reciprocal/snapshot | 384 | 64 | 1.043252 | 0.018179 | 1.039371–1.055624 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/mixed/section-side/clustered-edit/boundary | 384 | 64 | 2.209145 | 0.070475 | 2.190300–2.247980 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/mixed/section-side/clustered-edit/interior | 384 | 64 | 8.619926 | 0.426346 | 8.401119–8.784483 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/mixed/section-side/linear-read | 384 | 64 | 0.960325 | 0.008871 | 0.955855–0.963103 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/mixed/section-side/logical-projection | 384 | 64 | 0.959230 | 0.010668 | 0.955371–0.963150 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/mixed/section-side/random-read | 384 | 64 | 0.970576 | 0.011812 | 0.965815–0.977097 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| distribution/mixed/section-side/snapshot | 384 | 64 | 0.958559 | 0.016419 | 0.947967–0.962832 | distribution-scoped observation; remaining path components use the corresponding aggregate definition |
+| section-side-reciprocal/clustered-edit | 3072 | 256 | 0.251255 | 0.035096 | 0.246382–0.254860 | paired lower-is-better side16/side32 duration ratio |
+| section-side-reciprocal/clustered-edit/boundary | 1536 | 256 | 0.391071 | 0.122021 | 0.385527–0.430577 | paired lower-is-better side16/side32 duration ratio |
+| section-side-reciprocal/clustered-edit/interior | 1536 | 256 | 0.161684 | 0.029472 | 0.139047–0.170583 | paired lower-is-better side16/side32 duration ratio |
+| section-side-reciprocal/linear-read | 1536 | 256 | 1.025582 | 0.009823 | 1.023651–1.026849 | paired lower-is-better side16/side32 duration ratio |
+| section-side-reciprocal/logical-projection | 1536 | 256 | 0.989846 | 0.082228 | 0.925678–1.030720 | paired lower-is-better side16/side32 duration ratio |
+| section-side-reciprocal/random-read | 1536 | 256 | 1.033409 | 0.012602 | 1.031291–1.036761 | paired lower-is-better side16/side32 duration ratio |
+| section-side-reciprocal/read | 3072 | 256 | 1.030283 | 0.009523 | 1.028587–1.034560 | paired lower-is-better side16/side32 duration ratio |
+| section-side-reciprocal/snapshot | 1536 | 256 | 1.016192 | 0.311075 | 0.992190–1.034565 | paired lower-is-better side16/side32 duration ratio |
+| section-side/clustered-edit | 3072 | 256 | 4.600988 | 0.316175 | 4.520308–4.671214 | paired lower-is-better one-side32/eight-side16 duration ratio |
+| section-side/clustered-edit/boundary | 1536 | 256 | 2.557234 | 1.160769 | 2.320773–2.594030 | paired lower-is-better one-side32/eight-side16 duration ratio |
+| section-side/clustered-edit/interior | 1536 | 256 | 6.189421 | 1.375199 | 5.862258–7.196523 | paired lower-is-better one-side32/eight-side16 duration ratio |
+| section-side/linear-read | 1536 | 256 | 0.975087 | 0.009343 | 0.973853–0.976904 | paired lower-is-better one-side32/eight-side16 duration ratio |
+| section-side/logical-projection | 1536 | 256 | 1.010349 | 0.082340 | 0.969692–1.080676 | paired lower-is-better one-side32/eight-side16 duration ratio |
+| section-side/random-read | 1536 | 256 | 0.967711 | 0.011709 | 0.964516–0.969794 | paired lower-is-better one-side32/eight-side16 duration ratio |
+| section-side/read | 3072 | 256 | 0.970608 | 0.009042 | 0.966595–0.972244 | paired lower-is-better one-side32/eight-side16 duration ratio |
+| section-side/snapshot | 1536 | 256 | 0.984451 | 0.434806 | 0.966929–1.008932 | paired lower-is-better one-side32/eight-side16 duration ratio |
 | fresh-process-memory/homogeneous/one-side32-vs-dense | 9 | 9 | 0.000793 | 0.000000 | 0.000793–0.000793 | paired fresh-process retained-memory ratio; lower is better |
 | fresh-process-memory/homogeneous/eight-side16-vs-dense | 9 | 9 | 0.004638 | 0.000000 | 0.004638–0.004638 | paired fresh-process retained-memory ratio; lower is better |
 | fresh-process-memory/homogeneous/section-side | 9 | 9 | 0.171081 | 0.000000 | 0.171081–0.171081 | paired fresh-process retained-memory ratio; lower is better |
@@ -218,6 +218,6 @@ Each mode/distribution/trial is a fresh process with a retained root and explici
 
 Observed host/runtime: Fedora Linux 43 (KDE Plasma Desktop Edition) / .NET 10.0.11 / SDK 10.0.400.
 CPU/power/GC: AMD Ryzen 7 5800U with Radeon Graphics / platform-profile=balanced; cpu-governor=powersave / server GC=False, latency=Interactive.
-Source: f84544935abf98cc066356002188cf89e114eb0b; dirty=False; source hash=142f0283c509438095ca7eeca5153603ef81f6a9bf32eef19ba3fa10e06dfc98.
+Source: bc8117549935cf74d6fa3870e4364bfc05ee24ff; dirty=False; source hash=361d986978a647882cee6c6c68d5cbddc05a947b7244920a0797337b8e42e74c.
 
 The companion JSON contains summary metadata and a SHA-256 reference to the bounded raw NDJSON observation artifact.

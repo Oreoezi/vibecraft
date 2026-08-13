@@ -26,21 +26,29 @@ The retained full-profile evidence is:
 - [bounded raw observations](../../../artifacts/g1/e1/full-observational/e1-core-data-raw.ndjson)
 
 The `full` profile ran from clean commit
-`f84544935abf98cc066356002188cf89e114eb0b`. It fingerprinted all 12,500 canonical
+`bc8117549935cf74d6fa3870e4364bfc05ee24ff`. It fingerprinted all 12,500 canonical
 32³ cubes; measured 256 deterministic round-robin cubes over six alternating paired
 rounds; executed 256 interior and 256 boundary clusters per layout; completed nine
 fresh-process trials for each of three representations and four distributions (108
 trials); and performed 10,000 bootstrap resamples over cube-level units. It started
-at `2026-08-13T19:08:05Z` and completed at `2026-08-13T19:29:22Z`.
+at `2026-08-13T20:00:48Z` and completed at `2026-08-13T20:21:24Z`.
 
 The run used Release binaries on Fedora Linux 43, .NET 10.0.11 / SDK 10.0.400, an
 AMD Ryzen 7 5800U, workstation GC, `platform-profile=balanced`, and
 `cpu-governor=powersave`. The source-tree SHA-256 is
-`142f0283c509438095ca7eeca5153603ef81f6a9bf32eef19ba3fa10e06dfc98`;
+`361d986978a647882cee6c6c68d5cbddc05a947b7244920a0797337b8e42e74c`;
 the benchmark-assembly SHA-256 is
-`5ff11a01e9be790863c31d5ffe4cebee5ca6751e4d61afe6484d6d71fb397031`.
-The raw artifact contains 44,032 observations / 21,012,284 bytes and hashes to
-`b64ec2eccff4be3c47b0a973da09af7fbcff4017e761bacd6b998d02299788a3`.
+`a8e401557edd375ddf950fa14c7ce7252b14ed04ab6c7d54b94829f07ac1c01e`.
+The raw artifact contains 44,032 observations / 21,012,267 bytes and hashes to
+`2028eacc44cc9c9b3e45bd3b96d0235d7c7bd3f5959ead230ba31deb0131eb5f`.
+
+This retained observation supersedes the earlier `f845449` artifact. That attempt
+could not reproduce its own locked-restore recipe because the benchmark's direct
+logical-codec project node was missing from its lockfile, and its primary snapshot
+statistic also included full semantic-cube reconstruction. Both defects remain
+visible in Git history. The retained run starts from a locked-restorable commit and
+times snapshot creation only; semantic reconstruction remains an untimed correctness
+check.
 
 ## Criterion status
 
@@ -52,12 +60,12 @@ The raw artifact contains 44,032 observations / 21,012,284 bytes and hashes to
 | Positive measured durations | Pass | Every paired duration was positive; the harness did not synthesize an equality ratio for a zero duration. |
 | Adaptive retained memory, one side-32 section | Pass | Equal-weight homogeneous/layered/mixed upper95 is 0.090005 (limit 0.50); high-entropy upper95 is 1.000793 (limit 1.10). |
 | Adaptive retained memory, eight side-16 sections | Pass | Equal-weight homogeneous/layered/mixed upper95 is 0.120902 (limit 0.50); high-entropy upper95 is 1.006346 (limit 1.10). |
-| Adaptive timing, one side-32 section | Fail | Maximum upper95 adaptive/dense ratio across read/edit categories is 273.944647 (limit 1.15). |
-| Adaptive timing, eight side-16 sections | Fail | Maximum upper95 adaptive/dense ratio across read/edit categories is 69.232238 (limit 1.15). |
+| Adaptive timing, one side-32 section | Fail | Maximum upper95 adaptive/dense ratio across read/edit categories is 273.196319 (limit 1.15). |
+| Adaptive timing, eight side-16 sections | Fail | Maximum upper95 adaptive/dense ratio across read/edit categories is 68.621421 (limit 1.15). |
 | Side-32 retained-memory rule | Fail | Balanced upper95 side32/side16 retained-memory ratio is 0.928240 (limit 0.80). |
-| Side-32 five-primary rule | Fail | Zero of memory/read/edit/snapshot/projection upper intervals are at most 0.80; maximum upper95 is 4.691369 (limit 1.15). |
+| Side-32 five-primary rule | Fail | Zero of memory/read/edit/snapshot/projection upper intervals are at most 0.80; maximum upper95 is 4.671214 (limit 1.15). |
 | Side-32 amplification rule | Fail | Maximum p95 candidate/reference ratio across canonical logical bytes and unique halo samples is 8.079583 (limit 2.0). |
-| Side-16 five-primary rule | Pass | Equal-weight geometric mean of memory/read/edit/snapshot/projection medians is 0.804959 (limit 1.15); maximum upper95 is 1.241194 (limit 1.25). |
+| Side-16 five-primary rule | Pass | Equal-weight geometric mean of memory/read/edit/snapshot/projection medians is 0.775516 (limit 1.15); maximum upper95 is 1.077307 (limit 1.25). |
 | Side-16 amplification rule | Pass | Maximum p95 candidate/reference ratio across canonical logical bytes and unique halo samples is 1.000276 (limit 2.0). |
 | Real save and network amplification | Inconclusive | No G1 save format or network encoding exists to measure. Logical-projection bytes are a representation-neutral republish proxy, not storage or wire bytes. |
 | G0 owner acceptance | Blocked | `VC-G0-FP-0.1.0` remains provisional. There is no owner acceptance for this host, runtime, GC mode, power mode, or the applicable product budgets. |
@@ -85,6 +93,10 @@ cube/trial units used by each interval.
 
 Read timing uses `Stopwatch.GetTimestamp` after four unmeasured warmups. Thread
 allocation uses a separate checksum-matched probe after four additional warmups.
+Snapshot timing captures one immutable snapshot per candidate section and consumes
+only O(1) snapshot metadata in the timed interval. Equal-volume semantic
+reconstruction is verified separately outside that interval; one-side-32 and
+eight-side-16 metadata checksums are intentionally not asserted equal.
 The report relaunches itself in a fresh process with tiered compilation and tiered
 PGO disabled, records that JIT configuration, and passes it to memory children; this
 prevents runtime recompilation bookkeeping from being misreported as a data-path
