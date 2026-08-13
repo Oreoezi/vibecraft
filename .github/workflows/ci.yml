@@ -48,8 +48,18 @@ jobs:
       - name: Test
         run: dotnet test VibeCraft.slnx --configuration Release --no-build
 
-      - name: Run benchmark smoke fixture
-        run: dotnet run --project benchmarks/VibeCraft.G1.Benchmarks/VibeCraft.G1.Benchmarks.csproj --configuration Release --no-build -- --job Dry --filter '*BootstrapBenchmark*'
+      - name: Run section benchmark matrix smoke
+        run: >-
+          dotnet run --project benchmarks/VibeCraft.G1.Benchmarks/VibeCraft.G1.Benchmarks.csproj
+          --configuration Release --no-build -- --job Dry --inProcess --anyCategories
+          SectionRandomReads SectionLinearReads SectionProjection SectionSnapshots SectionEdits SectionGrowth
+          EqualVolumeRandomReads EqualVolumeLinearReads EqualVolumeProjection EqualVolumeSnapshots EqualVolumeEdits EqualVolumeGrowth
+
+      - name: Run process-isolated retained-memory smoke
+        run: dotnet run --project benchmarks/VibeCraft.G1.Benchmarks/VibeCraft.G1.Benchmarks.csproj --configuration Release --no-build -- --section-memory-report --smoke --cubes 1 --trials 1 --max-bytes 67108864
+
+      - name: Run deterministic amplification-report smoke
+        run: dotnet run --project benchmarks/VibeCraft.G1.Benchmarks/VibeCraft.G1.Benchmarks.csproj --configuration Release --no-build -- --section-amplification-report --smoke --clusters 2
 
       - name: Verify formatting
         run: dotnet format VibeCraft.slnx --no-restore --verify-no-changes

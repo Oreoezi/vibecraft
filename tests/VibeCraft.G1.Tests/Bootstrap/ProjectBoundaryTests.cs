@@ -21,7 +21,9 @@ public sealed class ProjectBoundaryTests
         {
             ["benchmarks/VibeCraft.G1.Benchmarks/VibeCraft.G1.Benchmarks.csproj"] =
             [
+                "src/VibeCraft.Content/VibeCraft.Content.csproj",
                 "src/VibeCraft.Primitives/VibeCraft.Primitives.csproj",
+                "src/VibeCraft.WorldModel/VibeCraft.WorldModel.csproj",
             ],
             ["src/VibeCraft.Content/VibeCraft.Content.csproj"] =
             [
