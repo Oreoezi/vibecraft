@@ -18,8 +18,8 @@ public sealed class LogicalSectionRecord
         SectionGeometry geometry,
         BlockCoord origin,
         BlockCoord endInclusive,
-        ImmutableArray<WorldStateId> states,
-        ImmutableArray<WorldStateId> palette,
+        ImmutableArray<BlockStateId> states,
+        ImmutableArray<BlockStateId> palette,
         ImmutableArray<ushort> paletteIndices,
         ImmutableArray<LogicalSparseRecord> sparseRecords,
         ImmutableArray<LogicalScheduledTick> scheduledTicks)
@@ -47,11 +47,11 @@ public sealed class LogicalSectionRecord
     /// <summary>Gets the checked inclusive block-coordinate end of the section.</summary>
     public BlockCoord EndInclusive { get; }
 
-    /// <summary>Gets semantic world-state IDs in X-contiguous, then Z, then Y local-index order.</summary>
-    public ImmutableArray<WorldStateId> States { get; }
+    /// <summary>Gets semantic block-state IDs in X-contiguous, then Z, then Y local-index order.</summary>
+    public ImmutableArray<BlockStateId> States { get; }
 
-    /// <summary>Gets exactly the used world-state IDs in ascending numeric order.</summary>
-    public ImmutableArray<WorldStateId> Palette { get; }
+    /// <summary>Gets exactly the used block-state IDs in ascending numeric order.</summary>
+    public ImmutableArray<BlockStateId> Palette { get; }
 
     /// <summary>Gets one <see cref="Palette"/> offset for every semantic local state, in local-index order.</summary>
     public ImmutableArray<ushort> PaletteIndices { get; }
@@ -63,27 +63,26 @@ public sealed class LogicalSectionRecord
     public ImmutableArray<LogicalScheduledTick> ScheduledTicks { get; }
 
     /// <summary>
-    /// Gets the semantic world-state ID at one valid section-relative local coordinate.
+    /// Gets the semantic block-state ID at one valid section-relative local coordinate.
     /// </summary>
     /// <param name="local">The local block coordinate.</param>
-    /// <returns>The mapped semantic world-state ID.</returns>
+    /// <returns>The mapped semantic block-state ID.</returns>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="local"/> is outside this geometry.</exception>
-    public WorldStateId GetState(LocalBlock local)
+    public BlockStateId GetState(LocalBlock local)
     {
-        return States[Geometry.GetLinearIndex(local)];
+        return States[Geometry.GetLocalIndex(local).Value];
     }
 
     /// <summary>
-    /// Gets the semantic world-state ID at one X-contiguous/Z/Y local index.
+    /// Gets the semantic block-state ID at one X-contiguous/Z/Y local index.
     /// </summary>
     /// <param name="localIndex">The zero-based local index.</param>
-    /// <returns>The mapped semantic world-state ID.</returns>
+    /// <returns>The mapped semantic block-state ID.</returns>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="localIndex"/> is outside this record's volume.</exception>
-    public WorldStateId GetState(int localIndex)
+    public BlockStateId GetState(LocalIndex localIndex)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(localIndex);
-        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(localIndex, States.Length);
-        return States[localIndex];
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(localIndex.Value, States.Length);
+        return States[localIndex.Value];
     }
 
     internal static LogicalSectionRecord Create(LogicalSectionInput input, WorldStateMap worldStates)
@@ -91,25 +90,25 @@ public sealed class LogicalSectionRecord
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(worldStates);
 
-        foreach (WorldStateId state in input.States)
+        foreach (BlockStateId state in input.States)
         {
             if (!worldStates.TryGetState(state, out _))
             {
                 throw new ArgumentException(
-                    $"World state ID {state.Value} is not present in the supplied world-state map.",
+                    $"BlockStateId {state.Value} is not present in the supplied world-state map.",
                     nameof(input));
             }
         }
 
-        ImmutableArray<WorldStateId> palette = [.. input.States.Distinct().OrderBy(state => state.Value)];
-        Dictionary<WorldStateId, ushort> paletteOffsets = new(palette.Length);
+        ImmutableArray<BlockStateId> palette = [.. input.States.Distinct().OrderBy(state => state.Value)];
+        Dictionary<BlockStateId, ushort> paletteOffsets = new(palette.Length);
         for (int paletteIndex = 0; paletteIndex < palette.Length; paletteIndex++)
         {
             paletteOffsets.Add(palette[paletteIndex], checked((ushort)paletteIndex));
         }
 
         ImmutableArray<ushort>.Builder paletteIndices = ImmutableArray.CreateBuilder<ushort>(input.States.Length);
-        foreach (WorldStateId state in input.States)
+        foreach (BlockStateId state in input.States)
         {
             paletteIndices.Add(paletteOffsets[state]);
         }
@@ -142,11 +141,11 @@ public sealed class LogicalSectionInput
     /// </summary>
     /// <param name="key">The section-state logical record key.</param>
     /// <param name="geometry">The evaluated section geometry.</param>
-    /// <param name="states">Exactly one X-contiguous/Z/Y world-state ID for every local position.</param>
+    /// <param name="states">Exactly one X-contiguous/Z/Y block-state ID for every local position.</param>
     public LogicalSectionInput(
         LogicalRecordKey key,
         SectionGeometry geometry,
-        IEnumerable<WorldStateId> states)
+        IEnumerable<BlockStateId> states)
         : this(key, geometry, states, [], [])
     {
     }
@@ -156,7 +155,7 @@ public sealed class LogicalSectionInput
     /// </summary>
     /// <param name="key">The section-state logical record key.</param>
     /// <param name="geometry">The evaluated section geometry.</param>
-    /// <param name="states">Exactly one X-contiguous/Z/Y world-state ID for every local position.</param>
+    /// <param name="states">Exactly one X-contiguous/Z/Y block-state ID for every local position.</param>
     /// <param name="sparseInputs">Sparse payload inputs for local positions in this section.</param>
     /// <param name="scheduledTicks">Scheduled tick inputs for local positions in this section.</param>
     /// <exception cref="ArgumentException">Thrown when the record kind is not section state or states have the wrong count.</exception>
@@ -165,7 +164,7 @@ public sealed class LogicalSectionInput
     public LogicalSectionInput(
         LogicalRecordKey key,
         SectionGeometry geometry,
-        IEnumerable<WorldStateId> states,
+        IEnumerable<BlockStateId> states,
         IEnumerable<LogicalSparseInput> sparseInputs,
         IEnumerable<LogicalScheduledTick> scheduledTicks)
     {
@@ -196,8 +195,8 @@ public sealed class LogicalSectionInput
     /// <summary>Gets a copied evaluated section geometry.</summary>
     public SectionGeometry Geometry { get; }
 
-    /// <summary>Gets copied semantic world-state IDs in X-contiguous, then Z, then Y order.</summary>
-    public ImmutableArray<WorldStateId> States { get; }
+    /// <summary>Gets copied semantic block-state IDs in X-contiguous, then Z, then Y order.</summary>
+    public ImmutableArray<BlockStateId> States { get; }
 
     /// <summary>Gets copied sparse semantic inputs in caller order before canonical record sorting.</summary>
     public ImmutableArray<LogicalSparseInput> SparseInputs { get; }
@@ -211,12 +210,12 @@ public sealed class LogicalSectionInput
         return checked(side * side * side);
     }
 
-    private static ImmutableArray<WorldStateId> CopyExact(
-        IEnumerable<WorldStateId> source,
+    private static ImmutableArray<BlockStateId> CopyExact(
+        IEnumerable<BlockStateId> source,
         int expectedCount,
         string parameterName)
     {
-        ImmutableArray<WorldStateId> copied = CopyBounded(source, expectedCount, parameterName);
+        ImmutableArray<BlockStateId> copied = CopyBounded(source, expectedCount, parameterName);
         return copied.Length == expectedCount
             ? copied
             : throw new ArgumentException(
@@ -266,11 +265,11 @@ public sealed class LogicalSectionInput
                 throw new ArgumentException($"Sparse input at element {index} is uninitialized or invalid.", parameterName, exception);
             }
 
-            if (inputs[index].LocalIndex >= volume)
+            if (inputs[index].LocalIndex.Value >= volume)
             {
                 throw new ArgumentOutOfRangeException(
                     parameterName,
-                    inputs[index].LocalIndex,
+                    inputs[index].LocalIndex.Value,
                     $"Sparse input at element {index} must use a local index in the range 0 through {volume - 1}.");
             }
         }
@@ -292,11 +291,11 @@ public sealed class LogicalSectionInput
                 throw new ArgumentException($"Scheduled tick at element {index} is uninitialized or invalid.", parameterName, exception);
             }
 
-            if (ticks[index].LocalIndex >= volume)
+            if (ticks[index].LocalIndex.Value >= volume)
             {
                 throw new ArgumentOutOfRangeException(
                     parameterName,
-                    ticks[index].LocalIndex,
+                    ticks[index].LocalIndex.Value,
                     $"Scheduled tick at element {index} must use a local index in the range 0 through {volume - 1}.");
             }
         }

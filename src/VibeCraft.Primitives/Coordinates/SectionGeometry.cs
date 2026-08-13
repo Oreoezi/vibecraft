@@ -30,6 +30,18 @@ public readonly record struct SectionGeometry
     public SectionSide Side { get; }
 
     /// <summary>
+    /// Gets the number of block positions in this cubic geometry.
+    /// </summary>
+    public int Volume
+    {
+        get
+        {
+            int side = GetSideLength();
+            return checked(side * side * side);
+        }
+    }
+
+    /// <summary>
     /// Decomposes a block coordinate using mathematical floor division and modulus on every axis.
     /// </summary>
     /// <param name="block">The block coordinate to decompose.</param>
@@ -112,11 +124,27 @@ public readonly record struct SectionGeometry
     /// <param name="local">The section-relative local block coordinate.</param>
     /// <returns>The local index for this geometry.</returns>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="local"/> is not valid for this geometry.</exception>
-    public int GetLinearIndex(LocalBlock local)
+    public LocalIndex GetLocalIndex(LocalBlock local)
     {
         int side = GetSideLength();
         Validate(local, side);
-        return checked(local.X + (side * (local.Z + (side * local.Y))));
+        return new LocalIndex(checked(local.X + (side * (local.Z + (side * local.Y)))));
+    }
+
+    /// <summary>
+    /// Returns the local block coordinate identified by an X-contiguous, then Z, then Y local index.
+    /// </summary>
+    /// <param name="index">The section-local index.</param>
+    /// <returns>The local block coordinate for this geometry.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="index"/> is outside this geometry.</exception>
+    public LocalBlock GetLocalBlock(LocalIndex index)
+    {
+        int side = GetSideLength();
+        int value = index.GetValidatedValue(Volume);
+        int x = value % side;
+        int z = value / side % side;
+        int y = value / checked(side * side);
+        return new LocalBlock(x, y, z);
     }
 
     private int GetSideLength()

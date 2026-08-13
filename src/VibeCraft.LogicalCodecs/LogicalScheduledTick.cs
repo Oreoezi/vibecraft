@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using VibeCraft.Content;
+using VibeCraft.Primitives.Coordinates;
 using VibeCraft.Primitives.Time;
 
 namespace VibeCraft.LogicalCodecs;
@@ -39,17 +40,17 @@ public readonly record struct LogicalScheduledTick
     /// <param name="dueTick">The absolute logical world tick at which the entry becomes due.</param>
     /// <param name="priority">The bounded priority, where lower values sort first.</param>
     /// <param name="sequence">The fixture-local stable sequence.</param>
-    /// <param name="localIndex">The nonnegative section-local index; geometry validates its upper bound.</param>
+    /// <param name="localIndex">The section-local index; geometry validates its contextual upper bound.</param>
     /// <param name="expectedType">The canonical content type expected when this tick executes.</param>
-    /// <exception cref="ArgumentException">Thrown when the queue or expected content key is invalid.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when priority or local index is outside its valid range.</exception>
+    /// <exception cref="ArgumentException">Thrown when the queue or expected namespaced content ID is invalid.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when priority is outside its valid range.</exception>
     public LogicalScheduledTick(
         LogicalScheduledTickQueueKind queue,
         WorldTick dueTick,
         int priority,
         ulong sequence,
-        int localIndex,
-        ContentKey expectedType)
+        LocalIndex localIndex,
+        NamespacedContentId expectedType)
     {
         if (!Enum.IsDefined(queue))
         {
@@ -64,10 +65,9 @@ public readonly record struct LogicalScheduledTick
                 $"Scheduled-tick priority must be in the range {MinimumPriority} through {MaximumPriority}.");
         }
 
-        ArgumentOutOfRangeException.ThrowIfNegative(localIndex);
         if (!expectedType.IsValid)
         {
-            throw new ArgumentException("A validated canonical expected content key is required.", nameof(expectedType));
+            throw new ArgumentException("A validated canonical expected namespaced content ID is required.", nameof(expectedType));
         }
 
         Queue = queue;
@@ -91,10 +91,10 @@ public readonly record struct LogicalScheduledTick
     public ulong Sequence { get; }
 
     /// <summary>Gets the X-contiguous/Z/Y local index of the expected block or fluid.</summary>
-    public int LocalIndex { get; }
+    public LocalIndex LocalIndex { get; }
 
     /// <summary>Gets the canonical content type expected when this tick executes.</summary>
-    public ContentKey ExpectedType { get; }
+    public NamespacedContentId ExpectedType { get; }
 
     internal static ImmutableArray<LogicalScheduledTick> CreateCanonical(
         ImmutableArray<LogicalScheduledTick> inputs,
@@ -139,26 +139,25 @@ public readonly record struct LogicalScheduledTick
     {
         if (!Enum.IsDefined(Queue) ||
             Priority is < MinimumPriority or > MaximumPriority ||
-            LocalIndex < 0 ||
             !ExpectedType.IsValid)
         {
             throw new InvalidOperationException("LogicalScheduledTick is uninitialized or invalid.");
         }
     }
 
-    private static void ValidateLocalIndex(int localIndex, int volume, string parameterName)
+    private static void ValidateLocalIndex(LocalIndex localIndex, int volume, string parameterName)
     {
-        if (localIndex >= volume)
+        if (localIndex.Value >= volume)
         {
             throw new ArgumentOutOfRangeException(
                 parameterName,
-                localIndex,
+                localIndex.Value,
                 $"A scheduled-tick local index must be in the range 0 through {volume - 1}.");
         }
     }
 
     private readonly record struct ScheduledTickCoalescingIdentity(
         LogicalScheduledTickQueueKind Queue,
-        int LocalIndex,
-        ContentKey ExpectedType);
+        LocalIndex LocalIndex,
+        NamespacedContentId ExpectedType);
 }

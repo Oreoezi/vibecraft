@@ -1,4 +1,5 @@
 using VibeCraft.Content;
+using VibeCraft.Primitives.Coordinates;
 
 namespace VibeCraft.WorldModel.Sections;
 
@@ -8,20 +9,20 @@ internal abstract class BlockStateStorage(int count)
 
     internal abstract SectionBlockStorageKind Kind { get; }
 
-    internal abstract WorldStateId Get(int index);
+    internal abstract BlockStateId Get(LocalIndex index);
 
-    internal abstract void CopyTo(Span<WorldStateId> destination);
+    internal abstract void CopyTo(Span<BlockStateId> destination);
 
-    internal abstract BlockStateStorage Set(int index, WorldStateId state);
+    internal abstract BlockStateStorage Set(LocalIndex index, BlockStateId state);
 
     internal abstract SectionStorageMetrics GetMetrics();
 }
 
 internal sealed class UniformBlockStateStorage : BlockStateStorage
 {
-    private readonly WorldStateId _state;
+    private readonly BlockStateId _state;
 
-    internal UniformBlockStateStorage(int count, WorldStateId state)
+    internal UniformBlockStateStorage(int count, BlockStateId state)
         : base(count)
     {
         _state = state;
@@ -29,18 +30,18 @@ internal sealed class UniformBlockStateStorage : BlockStateStorage
 
     internal override SectionBlockStorageKind Kind => SectionBlockStorageKind.Uniform;
 
-    internal override WorldStateId Get(int index)
+    internal override BlockStateId Get(LocalIndex index)
     {
         ValidateIndex(index);
         return _state;
     }
 
-    internal override void CopyTo(Span<WorldStateId> destination)
+    internal override void CopyTo(Span<BlockStateId> destination)
     {
         destination[..Count].Fill(_state);
     }
 
-    internal override BlockStateStorage Set(int index, WorldStateId state)
+    internal override BlockStateStorage Set(LocalIndex index, BlockStateId state)
     {
         ValidateIndex(index);
         return PalettedBlockStateStorage.FromUniform(Count, _state, index, state);
@@ -51,25 +52,25 @@ internal sealed class UniformBlockStateStorage : BlockStateStorage
         return new SectionStorageMetrics(Kind, Count, 1, 1, 0, 0, 0, 0, sizeof(uint));
     }
 
-    private void ValidateIndex(int index)
+    private void ValidateIndex(LocalIndex index)
     {
-        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual((uint)index, (uint)Count, nameof(index));
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual((uint)index.Value, (uint)Count, nameof(index));
     }
 }
 
 internal sealed class PalettedBlockStateStorage : BlockStateStorage
 {
     private readonly int _paletteCount;
-    private readonly WorldStateId[] _palette;
-    private readonly Dictionary<WorldStateId, byte>? _reverseLookup;
+    private readonly BlockStateId[] _palette;
+    private readonly Dictionary<BlockStateId, byte>? _reverseLookup;
     private readonly PackedPaletteIndices _indices;
 
     private PalettedBlockStateStorage(
         int count,
-        WorldStateId[] palette,
+        BlockStateId[] palette,
         int paletteCount,
         PackedPaletteIndices indices,
-        Dictionary<WorldStateId, byte>? reverseLookup)
+        Dictionary<BlockStateId, byte>? reverseLookup)
         : base(count)
     {
         _palette = palette;
@@ -82,14 +83,15 @@ internal sealed class PalettedBlockStateStorage : BlockStateStorage
 
     internal static PalettedBlockStateStorage FromUniform(
         int count,
-        WorldStateId initialState,
-        int changedIndex,
-        WorldStateId changedState)
+        BlockStateId initialState,
+        LocalIndex changedIndex,
+        BlockStateId changedState)
     {
-        WorldStateId[] palette = [initialState, changedState];
+        BlockStateId[] palette = [initialState, changedState];
         PackedPaletteIndices indices = new(count, 1);
-        indices.Set(changedIndex, 1);
-        Dictionary<WorldStateId, byte> reverseLookup = new(2)
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual((uint)changedIndex.Value, (uint)count, nameof(changedIndex));
+        indices.Set(changedIndex.Value, 1);
+        Dictionary<BlockStateId, byte> reverseLookup = new(2)
         {
             [initialState] = 0,
             [changedState] = 1,
@@ -98,8 +100,8 @@ internal sealed class PalettedBlockStateStorage : BlockStateStorage
     }
 
     internal static PalettedBlockStateStorage FromCanonical(
-        ReadOnlySpan<WorldStateId> states,
-        WorldStateId[] sortedPalette)
+        ReadOnlySpan<BlockStateId> states,
+        BlockStateId[] sortedPalette)
     {
         if (sortedPalette.Length is < 2 or > 256)
         {
@@ -115,11 +117,11 @@ internal sealed class PalettedBlockStateStorage : BlockStateStorage
         }
 
         int capacity = GetPaletteCapacity(sortedPalette.Length);
-        WorldStateId[] palette = new WorldStateId[capacity];
+        BlockStateId[] palette = new BlockStateId[capacity];
         sortedPalette.CopyTo(palette, 0);
         byte bitsPerEntry = GetBitsPerEntry(sortedPalette.Length);
         PackedPaletteIndices indices = new(states.Length, bitsPerEntry);
-        Dictionary<WorldStateId, byte> lookup = new(sortedPalette.Length);
+        Dictionary<BlockStateId, byte> lookup = new(sortedPalette.Length);
         bool[] usedPaletteEntries = new bool[sortedPalette.Length];
         for (int index = 0; index < sortedPalette.Length; index++)
         {
@@ -142,12 +144,12 @@ internal sealed class PalettedBlockStateStorage : BlockStateStorage
             : new PalettedBlockStateStorage(states.Length, palette, sortedPalette.Length, indices, null);
     }
 
-    internal override WorldStateId Get(int index)
+    internal override BlockStateId Get(LocalIndex index)
     {
-        return _palette[_indices.Get(index)];
+        return _palette[_indices.Get(index.Value)];
     }
 
-    internal override void CopyTo(Span<WorldStateId> destination)
+    internal override void CopyTo(Span<BlockStateId> destination)
     {
         for (int index = 0; index < Count; index++)
         {
@@ -155,8 +157,9 @@ internal sealed class PalettedBlockStateStorage : BlockStateStorage
         }
     }
 
-    internal override BlockStateStorage Set(int index, WorldStateId state)
+    internal override BlockStateStorage Set(LocalIndex index, BlockStateId state)
     {
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual((uint)index.Value, (uint)Count, nameof(index));
         if (_reverseLookup is null)
         {
             throw new InvalidOperationException("An immutable snapshot representation cannot be mutated.");
@@ -164,21 +167,21 @@ internal sealed class PalettedBlockStateStorage : BlockStateStorage
 
         if (_reverseLookup.TryGetValue(state, out byte paletteIndex))
         {
-            _indices.Set(index, paletteIndex);
+            _indices.Set(index.Value, paletteIndex);
             return this;
         }
 
         if (_paletteCount == 256)
         {
-            WorldStateId[] direct = new WorldStateId[Count];
+            BlockStateId[] direct = new BlockStateId[Count];
             CopyTo(direct);
-            direct[index] = state;
+            direct[index.Value] = state;
             return new DirectBlockStateStorage(direct);
         }
 
         int nextCount = checked(_paletteCount + 1);
         int nextCapacity = GetPaletteCapacity(nextCount);
-        WorldStateId[] nextPalette = new WorldStateId[nextCapacity];
+        BlockStateId[] nextPalette = new BlockStateId[nextCapacity];
         Array.Copy(_palette, nextPalette, _paletteCount);
         nextPalette[_paletteCount] = state;
 
@@ -186,9 +189,9 @@ internal sealed class PalettedBlockStateStorage : BlockStateStorage
         PackedPaletteIndices nextIndices = nextBits == _indices.BitsPerEntry
             ? _indices.Clone()
             : _indices.Repack(nextBits);
-        nextIndices.Set(index, checked((byte)_paletteCount));
+        nextIndices.Set(index.Value, checked((byte)_paletteCount));
 
-        Dictionary<WorldStateId, byte> nextLookup = new(_reverseLookup)
+        Dictionary<BlockStateId, byte> nextLookup = new(_reverseLookup)
         {
             [state] = checked((byte)_paletteCount),
         };
@@ -235,9 +238,9 @@ internal sealed class PalettedBlockStateStorage : BlockStateStorage
 
 internal sealed class DirectBlockStateStorage : BlockStateStorage
 {
-    private readonly WorldStateId[] _states;
+    private readonly BlockStateId[] _states;
 
-    internal DirectBlockStateStorage(WorldStateId[] states)
+    internal DirectBlockStateStorage(BlockStateId[] states)
         : base(states?.Length ?? throw new ArgumentNullException(nameof(states)))
     {
         _states = states;
@@ -245,21 +248,21 @@ internal sealed class DirectBlockStateStorage : BlockStateStorage
 
     internal override SectionBlockStorageKind Kind => SectionBlockStorageKind.Direct;
 
-    internal override WorldStateId Get(int index)
+    internal override BlockStateId Get(LocalIndex index)
     {
-        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual((uint)index, (uint)Count, nameof(index));
-        return _states[index];
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual((uint)index.Value, (uint)Count, nameof(index));
+        return _states[index.Value];
     }
 
-    internal override void CopyTo(Span<WorldStateId> destination)
+    internal override void CopyTo(Span<BlockStateId> destination)
     {
         _states.CopyTo(destination);
     }
 
-    internal override BlockStateStorage Set(int index, WorldStateId state)
+    internal override BlockStateStorage Set(LocalIndex index, BlockStateId state)
     {
-        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual((uint)index, (uint)Count, nameof(index));
-        _states[index] = state;
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual((uint)index.Value, (uint)Count, nameof(index));
+        _states[index.Value] = state;
         return this;
     }
 

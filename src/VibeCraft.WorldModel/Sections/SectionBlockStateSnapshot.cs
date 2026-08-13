@@ -17,7 +17,7 @@ internal sealed class SectionBlockStateSnapshot : IReadOnlySectionBlockStates
         Revision = revision;
         _storage = storage ?? throw new ArgumentNullException(nameof(storage));
         Count = storage.Count;
-        int expectedCount = checked(Geometry.Side.Value * Geometry.Side.Value * Geometry.Side.Value);
+        int expectedCount = Geometry.Volume;
         if (Count != expectedCount)
         {
             throw new ArgumentException($"Snapshot storage requires exactly {expectedCount} entries for this geometry.", nameof(storage));
@@ -27,17 +27,16 @@ internal sealed class SectionBlockStateSnapshot : IReadOnlySectionBlockStates
     internal static SectionBlockStateSnapshot Create(
         SectionGeometry geometry,
         SectionRevision revision,
-        ReadOnlySpan<WorldStateId> semanticStates)
+        ReadOnlySpan<BlockStateId> semanticStates)
     {
         SectionGeometry validatedGeometry = new(geometry.Side);
-        int side = validatedGeometry.Side.Value;
-        int expectedCount = checked(side * side * side);
+        int expectedCount = validatedGeometry.Volume;
         if (semanticStates.Length != expectedCount)
         {
             throw new ArgumentException($"A snapshot requires exactly {expectedCount} semantic states for this geometry.", nameof(semanticStates));
         }
 
-        HashSet<WorldStateId> distinct = [.. semanticStates];
+        HashSet<BlockStateId> distinct = [.. semanticStates];
         BlockStateStorage storage;
         if (distinct.Count == 1)
         {
@@ -45,7 +44,7 @@ internal sealed class SectionBlockStateSnapshot : IReadOnlySectionBlockStates
         }
         else if (distinct.Count <= 256)
         {
-            WorldStateId[] sortedPalette = [.. distinct.OrderBy(state => state.Value)];
+            BlockStateId[] sortedPalette = [.. distinct.OrderBy(state => state.Value)];
             storage = PalettedBlockStateStorage.FromCanonical(semanticStates, sortedPalette);
         }
         else
@@ -64,12 +63,12 @@ internal sealed class SectionBlockStateSnapshot : IReadOnlySectionBlockStates
 
     public SectionBlockStorageKind StorageKind => _storage.Kind;
 
-    public WorldStateId Get(LocalBlock local)
+    public BlockStateId Get(LocalBlock local)
     {
-        return _storage.Get(Geometry.GetLinearIndex(local));
+        return _storage.Get(Geometry.GetLocalIndex(local));
     }
 
-    public void CopyTo(Span<WorldStateId> destination)
+    public void CopyTo(Span<BlockStateId> destination)
     {
         if (destination.Length < Count)
         {

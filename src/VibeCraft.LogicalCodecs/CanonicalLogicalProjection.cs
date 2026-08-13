@@ -23,7 +23,7 @@ public sealed class CanonicalLogicalProjection
         Sections = sections;
     }
 
-    /// <summary>Gets the world-state bindings in ascending world-state ID order, including preserved gaps.</summary>
+    /// <summary>Gets the world-state bindings in ascending block-state ID order, including preserved gaps.</summary>
     public ImmutableArray<WorldStateBinding> MappingBindings { get; }
 
     /// <summary>Gets section-state records in canonical logical-record-key order.</summary>

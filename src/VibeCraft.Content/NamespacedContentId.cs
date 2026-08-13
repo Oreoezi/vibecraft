@@ -1,7 +1,7 @@
 namespace VibeCraft.Content;
 
 /// <summary>Defines a validated, canonical namespaced content identifier.</summary>
-public readonly struct ContentKey : IEquatable<ContentKey>, IComparable<ContentKey>
+public readonly struct NamespacedContentId : IEquatable<NamespacedContentId>, IComparable<NamespacedContentId>
 {
     /// <summary>The largest permitted namespace length.</summary>
     public const int MaxNamespaceLength = 64;
@@ -9,7 +9,7 @@ public readonly struct ContentKey : IEquatable<ContentKey>, IComparable<ContentK
     /// <summary>The largest permitted path length.</summary>
     public const int MaxPathLength = 256;
 
-    private ContentKey(string @namespace, string path)
+    private NamespacedContentId(string @namespace, string path)
     {
         Namespace = @namespace;
         Path = path;
@@ -21,12 +21,12 @@ public readonly struct ContentKey : IEquatable<ContentKey>, IComparable<ContentK
     /// <summary>Gets the canonical path component.</summary>
     public string Path { get; }
 
-    /// <summary>Gets whether this value is a validated canonical content key.</summary>
+    /// <summary>Gets whether this value is a validated canonical namespaced content identifier.</summary>
     public bool IsValid => Namespace is not null && Path is not null && IsNamespace(Namespace) && IsPath(Path);
 
-    /// <summary>Creates a key from separately validated canonical components.</summary>
+    /// <summary>Creates a namespaced content identifier from separately validated canonical components.</summary>
     /// <exception cref="ArgumentException">Thrown when either component is not canonical lowercase ASCII.</exception>
-    public static ContentKey Create(string @namespace, string path)
+    public static NamespacedContentId Create(string @namespace, string path)
     {
         ArgumentNullException.ThrowIfNull(@namespace);
         ArgumentNullException.ThrowIfNull(path);
@@ -35,22 +35,22 @@ public readonly struct ContentKey : IEquatable<ContentKey>, IComparable<ContentK
             ? throw new ArgumentException("Namespace must match [a-z0-9_.-]+ and be length-bounded.", nameof(@namespace))
             : !IsPath(path)
             ? throw new ArgumentException("Path must match [a-z0-9_./-]+ and be length-bounded.", nameof(path))
-            : new ContentKey(@namespace, path);
+            : new NamespacedContentId(@namespace, path);
     }
 
-    /// <summary>Parses one canonical <c>namespace:path</c> key.</summary>
+    /// <summary>Parses one canonical <c>namespace:path</c> content identifier.</summary>
     /// <exception cref="FormatException">Thrown when <paramref name="value"/> is not canonical.</exception>
-    public static ContentKey Parse(string value)
+    public static NamespacedContentId Parse(string value)
     {
-        return TryParse(value, out ContentKey key)
-            ? key
-            : throw new FormatException("Content key must be canonical lowercase ASCII namespace:path.");
+        return TryParse(value, out NamespacedContentId contentId)
+            ? contentId
+            : throw new FormatException("Namespaced content ID must be canonical lowercase ASCII namespace:path.");
     }
 
-    /// <summary>Attempts to parse one canonical <c>namespace:path</c> key.</summary>
-    public static bool TryParse(string? value, out ContentKey key)
+    /// <summary>Attempts to parse one canonical <c>namespace:path</c> content identifier.</summary>
+    public static bool TryParse(string? value, out NamespacedContentId contentId)
     {
-        key = default;
+        contentId = default;
         if (string.IsNullOrEmpty(value))
         {
             return false;
@@ -69,12 +69,12 @@ public readonly struct ContentKey : IEquatable<ContentKey>, IComparable<ContentK
             return false;
         }
 
-        key = new ContentKey(@namespace, path);
+        contentId = new NamespacedContentId(@namespace, path);
         return true;
     }
 
     /// <inheritdoc />
-    public int CompareTo(ContentKey other)
+    public int CompareTo(NamespacedContentId other)
     {
         ThrowIfInvalid();
         other.ThrowIfInvalid();
@@ -83,7 +83,7 @@ public readonly struct ContentKey : IEquatable<ContentKey>, IComparable<ContentK
     }
 
     /// <inheritdoc />
-    public bool Equals(ContentKey other)
+    public bool Equals(NamespacedContentId other)
     {
         return StringComparer.Ordinal.Equals(Namespace, other.Namespace) && StringComparer.Ordinal.Equals(Path, other.Path);
     }
@@ -91,7 +91,7 @@ public readonly struct ContentKey : IEquatable<ContentKey>, IComparable<ContentK
     /// <inheritdoc />
     public override bool Equals(object? obj)
     {
-        return obj is ContentKey other && Equals(other);
+        return obj is NamespacedContentId other && Equals(other);
     }
 
     /// <inheritdoc />
@@ -105,41 +105,41 @@ public readonly struct ContentKey : IEquatable<ContentKey>, IComparable<ContentK
     /// <inheritdoc />
     public override string ToString()
     {
-        return IsValid ? $"{Namespace}:{Path}" : "<invalid-content-key>";
+        return IsValid ? $"{Namespace}:{Path}" : "<invalid-namespaced-content-id>";
     }
 
-    /// <summary>Compares two content keys using ordinal semantics.</summary>
-    public static bool operator ==(ContentKey left, ContentKey right)
+    /// <summary>Compares two namespaced content identifiers using ordinal semantics.</summary>
+    public static bool operator ==(NamespacedContentId left, NamespacedContentId right)
     {
         return left.Equals(right);
     }
 
-    /// <summary>Compares two content keys using ordinal semantics.</summary>
-    public static bool operator !=(ContentKey left, ContentKey right)
+    /// <summary>Compares two namespaced content identifiers using ordinal semantics.</summary>
+    public static bool operator !=(NamespacedContentId left, NamespacedContentId right)
     {
         return !left.Equals(right);
     }
 
-    /// <summary>Compares two content keys using ordinal semantics.</summary>
-    public static bool operator <(ContentKey left, ContentKey right)
+    /// <summary>Compares two namespaced content identifiers using ordinal semantics.</summary>
+    public static bool operator <(NamespacedContentId left, NamespacedContentId right)
     {
         return left.CompareTo(right) < 0;
     }
 
-    /// <summary>Compares two content keys using ordinal semantics.</summary>
-    public static bool operator <=(ContentKey left, ContentKey right)
+    /// <summary>Compares two namespaced content identifiers using ordinal semantics.</summary>
+    public static bool operator <=(NamespacedContentId left, NamespacedContentId right)
     {
         return left.CompareTo(right) <= 0;
     }
 
-    /// <summary>Compares two content keys using ordinal semantics.</summary>
-    public static bool operator >(ContentKey left, ContentKey right)
+    /// <summary>Compares two namespaced content identifiers using ordinal semantics.</summary>
+    public static bool operator >(NamespacedContentId left, NamespacedContentId right)
     {
         return left.CompareTo(right) > 0;
     }
 
-    /// <summary>Compares two content keys using ordinal semantics.</summary>
-    public static bool operator >=(ContentKey left, ContentKey right)
+    /// <summary>Compares two namespaced content identifiers using ordinal semantics.</summary>
+    public static bool operator >=(NamespacedContentId left, NamespacedContentId right)
     {
         return left.CompareTo(right) >= 0;
     }
@@ -148,7 +148,7 @@ public readonly struct ContentKey : IEquatable<ContentKey>, IComparable<ContentK
     {
         if (!IsValid)
         {
-            throw new InvalidOperationException("ContentKey is uninitialized or invalid.");
+            throw new InvalidOperationException("NamespacedContentId is uninitialized or invalid.");
         }
     }
 

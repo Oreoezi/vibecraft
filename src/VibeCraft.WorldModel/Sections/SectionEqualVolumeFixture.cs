@@ -24,7 +24,7 @@ internal enum SectionEditIntent : byte
 
 internal readonly record struct SectionEdit(
     int GlobalIndex,
-    WorldStateId State,
+    BlockStateId State,
     SectionEditIntent Intent);
 
 /// <summary>
@@ -32,12 +32,14 @@ internal readonly record struct SectionEdit(
 /// </summary>
 internal static class SectionEqualVolumeFixture
 {
+    private static readonly LocalIndex[] Side16LocalIndexTrace = CreateSide16LocalIndexTrace();
+
     internal const int CubeSide = 32;
     internal const int CubeVolume = CubeSide * CubeSide * CubeSide;
     internal const int DefaultClusterCount = 256;
     internal const int EditsPerCluster = 4 * 4 * 4;
 
-    internal static WorldStateId[] CreateCanonicalCube(
+    internal static BlockStateId[] CreateCanonicalCube(
         SectionFixtureKind fixture,
         ulong seed = SectionCandidateFixture.DefaultSeed)
     {
@@ -46,7 +48,7 @@ internal static class SectionEqualVolumeFixture
 
     internal static MutableSectionBlockStates[] CreateSections(
         SectionEqualVolumeLayout layout,
-        ReadOnlySpan<WorldStateId> canonicalCube)
+        ReadOnlySpan<BlockStateId> canonicalCube)
     {
         ValidateCanonicalCube(canonicalCube);
         if (layout == SectionEqualVolumeLayout.OneSide32)
@@ -67,7 +69,7 @@ internal static class SectionEqualVolumeFixture
                 for (int sectionX = 0; sectionX < 2; sectionX++)
                 {
                     int sectionIndex = GetSectionIndex(sectionX, sectionY, sectionZ);
-                    WorldStateId[] octant = SectionCandidateFixture.ExtractSide16(canonicalCube, sectionX, sectionY, sectionZ);
+                    BlockStateId[] octant = SectionCandidateFixture.ExtractSide16(canonicalCube, sectionX, sectionY, sectionZ);
                     sections[sectionIndex] = SectionCandidateFixture.CreateSection(SectionGeometry.Side16, octant);
                 }
             }
@@ -76,7 +78,7 @@ internal static class SectionEqualVolumeFixture
         return sections;
     }
 
-    internal static WorldStateId GetGlobal(
+    internal static BlockStateId GetGlobal(
         IReadOnlySectionBlockStates[] sections,
         SectionEqualVolumeLayout layout,
         int globalIndex)
@@ -89,7 +91,7 @@ internal static class SectionEqualVolumeFixture
     /// <summary>
     /// Reads a previously validated equal-volume layout without repeating fixture validation in a measured hot path.
     /// </summary>
-    internal static WorldStateId GetGlobalUnchecked(
+    internal static BlockStateId GetGlobalUnchecked(
         IReadOnlySectionBlockStates[] sections,
         SectionEqualVolumeLayout layout,
         int globalIndex)
@@ -132,7 +134,7 @@ internal static class SectionEqualVolumeFixture
         return sections[sectionIndex].TrySet(new LocalBlock(x & 15, y & 15, z & 15), edit.State);
     }
 
-    internal static SectionWriteResult SetDense(Span<WorldStateId> dense, SectionEdit edit)
+    internal static SectionWriteResult SetDense(Span<BlockStateId> dense, SectionEdit edit)
     {
         if (dense.Length != CubeVolume)
         {
@@ -152,8 +154,8 @@ internal static class SectionEqualVolumeFixture
     internal static void CopyToCanonical(
         IReadOnlySectionBlockStates[] sections,
         SectionEqualVolumeLayout layout,
-        Span<WorldStateId> destination,
-        WorldStateId[][] side16Scratch)
+        Span<BlockStateId> destination,
+        BlockStateId[][] side16Scratch)
     {
         ValidateSections(sections, layout);
         if (destination.Length < CubeVolume)
@@ -177,8 +179,8 @@ internal static class SectionEqualVolumeFixture
     internal static void CopyToCanonicalUnchecked(
         IReadOnlySectionBlockStates[] sections,
         SectionEqualVolumeLayout layout,
-        Span<WorldStateId> destination,
-        WorldStateId[][] side16Scratch)
+        Span<BlockStateId> destination,
+        BlockStateId[][] side16Scratch)
     {
         if (layout == SectionEqualVolumeLayout.OneSide32)
         {
@@ -195,12 +197,24 @@ internal static class SectionEqualVolumeFixture
         {
             DecomposeGlobalIndex(globalIndex, out int x, out int y, out int z);
             int sectionIndex = GetSectionIndex(x >> 4, y >> 4, z >> 4);
-            int localIndex = (x & 15) + (16 * ((z & 15) + (16 * (y & 15))));
-            destination[globalIndex] = side16Scratch[sectionIndex][localIndex];
+            LocalIndex localIndex = Side16LocalIndexTrace[globalIndex];
+            destination[globalIndex] = side16Scratch[sectionIndex][localIndex.Value];
         }
     }
 
-    private static void ValidateSide16Scratch(WorldStateId[][] side16Scratch)
+    private static LocalIndex[] CreateSide16LocalIndexTrace()
+    {
+        LocalIndex[] trace = new LocalIndex[CubeVolume];
+        for (int globalIndex = 0; globalIndex < trace.Length; globalIndex++)
+        {
+            DecomposeGlobalIndex(globalIndex, out int x, out int y, out int z);
+            trace[globalIndex] = SectionGeometry.Side16.GetLocalIndex(new LocalBlock(x & 15, y & 15, z & 15));
+        }
+
+        return trace;
+    }
+
+    private static void ValidateSide16Scratch(BlockStateId[][] side16Scratch)
     {
         ArgumentNullException.ThrowIfNull(side16Scratch);
         if (side16Scratch.Length < 8)
@@ -226,7 +240,7 @@ internal static class SectionEqualVolumeFixture
     }
 
     internal static SectionEdit[] CreateEditTrace(
-        ReadOnlySpan<WorldStateId> canonicalCube,
+        ReadOnlySpan<BlockStateId> canonicalCube,
         SectionEditTraceKind traceKind,
         ulong seed = SectionCandidateFixture.DefaultSeed,
         int clusterCount = DefaultClusterCount)
@@ -239,8 +253,8 @@ internal static class SectionEqualVolumeFixture
             throw new ArgumentOutOfRangeException(nameof(traceKind), traceKind, "The edit trace kind is undefined.");
         }
 
-        WorldStateId[] working = canonicalCube.ToArray();
-        WorldStateId[] existingStates = [.. canonicalCube.ToArray().Distinct().OrderBy(state => state.Value)];
+        BlockStateId[] working = canonicalCube.ToArray();
+        BlockStateId[] existingStates = [.. canonicalCube.ToArray().Distinct().OrderBy(state => state.Value)];
         SectionEdit[] trace = new SectionEdit[checked(clusterCount * EditsPerCluster)];
         ulong random = seed ^ ((ulong)traceKind * 0xA0761D6478BD642FUL);
         int traceIndex = 0;
@@ -263,7 +277,7 @@ internal static class SectionEqualVolumeFixture
                             1 => SectionEditIntent.ExistingStateChange,
                             _ => SectionEditIntent.NewStateChange,
                         };
-                        WorldStateId state = SelectEditState(
+                        BlockStateId state = SelectEditState(
                             working[globalIndex],
                             existingStates,
                             requestedIntent,
@@ -325,9 +339,9 @@ internal static class SectionEqualVolumeFixture
         sectionY = (sectionIndex >> 2) & 1;
     }
 
-    private static WorldStateId SelectEditState(
-        WorldStateId current,
-        WorldStateId[] existingStates,
+    private static BlockStateId SelectEditState(
+        BlockStateId current,
+        BlockStateId[] existingStates,
         SectionEditIntent requestedIntent,
         int traceIndex,
         out SectionEditIntent actualIntent)
@@ -343,7 +357,7 @@ internal static class SectionEqualVolumeFixture
             int start = traceIndex % existingStates.Length;
             for (int offset = 0; offset < existingStates.Length; offset++)
             {
-                WorldStateId candidate = existingStates[(start + offset) % existingStates.Length];
+                BlockStateId candidate = existingStates[(start + offset) % existingStates.Length];
                 if (!candidate.Equals(current))
                 {
                     actualIntent = requestedIntent;
@@ -353,7 +367,7 @@ internal static class SectionEqualVolumeFixture
         }
 
         actualIntent = SectionEditIntent.NewStateChange;
-        return new WorldStateId(checked(0x80000000U + (uint)traceIndex));
+        return new BlockStateId(checked(0x80000000U + (uint)traceIndex));
     }
 
     private static void GetClusterOrigin(
@@ -394,7 +408,7 @@ internal static class SectionEqualVolumeFixture
         return value ^ (value >> 31);
     }
 
-    private static void ValidateCanonicalCube(ReadOnlySpan<WorldStateId> canonicalCube)
+    private static void ValidateCanonicalCube(ReadOnlySpan<BlockStateId> canonicalCube)
     {
         if (canonicalCube.Length != CubeVolume)
         {

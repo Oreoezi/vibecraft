@@ -40,7 +40,7 @@ internal static class SectionAmplificationReport
         List<AmplificationObservation> observations = [];
         foreach (SectionFixtureKind fixture in fixtures)
         {
-            WorldStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(fixture, options.Seed);
+            BlockStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(fixture, options.Seed);
             foreach (SectionEditTraceKind traceKind in Enum.GetValues<SectionEditTraceKind>())
             {
                 SectionEdit[] trace = SectionEqualVolumeFixture.CreateEditTrace(
@@ -71,13 +71,13 @@ internal static class SectionAmplificationReport
     }
 
     private static AmplificationObservation Observe(
-        WorldStateId[] canonical,
+        BlockStateId[] canonical,
         SectionEdit[] trace,
         SectionFixtureKind fixture,
         SectionEditTraceKind traceKind,
         SectionEqualVolumeLayout layout)
     {
-        WorldStateId[] dense = (WorldStateId[])canonical.Clone();
+        BlockStateId[] dense = (BlockStateId[])canonical.Clone();
         MutableSectionBlockStates[] sections = SectionEqualVolumeFixture.CreateSections(layout, canonical);
         int changed = 0;
         int unchanged = 0;

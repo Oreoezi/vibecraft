@@ -22,18 +22,18 @@ public sealed class SectionBlockStatesTests
     public void UniformFirstDifferenceBecomesPaletted(int side)
     {
         SectionGeometry geometry = Geometry(side);
-        MutableSectionBlockStates section = new(geometry, new WorldStateId(7), SectionRevision.Initial);
+        MutableSectionBlockStates section = new(geometry, new BlockStateId(7), SectionRevision.Initial);
 
         Assert.Equal(side * side * side, section.Count);
         Assert.Equal(SectionBlockStorageKind.Uniform, section.StorageKind);
-        Assert.Equal(new WorldStateId(7), section.Get(geometry.CreateLocal(0, 0, 0)));
-        Assert.Equal(SectionWriteResult.Unchanged, section.TrySet(geometry.CreateLocal(1, 2, 3), new WorldStateId(7)));
+        Assert.Equal(new BlockStateId(7), section.Get(geometry.CreateLocal(0, 0, 0)));
+        Assert.Equal(SectionWriteResult.Unchanged, section.TrySet(geometry.CreateLocal(1, 2, 3), new BlockStateId(7)));
         Assert.Equal(SectionRevision.Initial, section.Revision);
 
-        Assert.Equal(SectionWriteResult.Changed, section.TrySet(geometry.CreateLocal(1, 2, 3), new WorldStateId(uint.MaxValue)));
+        Assert.Equal(SectionWriteResult.Changed, section.TrySet(geometry.CreateLocal(1, 2, 3), new BlockStateId(uint.MaxValue)));
         Assert.Equal(SectionBlockStorageKind.Paletted, section.StorageKind);
         Assert.Equal(new SectionRevision(1), section.Revision);
-        Assert.Equal(new WorldStateId(uint.MaxValue), section.Get(geometry.CreateLocal(1, 2, 3)));
+        Assert.Equal(new BlockStateId(uint.MaxValue), section.Get(geometry.CreateLocal(1, 2, 3)));
 
         SectionStorageMetrics metrics = section.GetStorageMetrics();
         Assert.Equal(2, metrics.PaletteEntryCount);
@@ -53,8 +53,8 @@ public sealed class SectionBlockStatesTests
         for (int distinctCount = 2; distinctCount <= 257; distinctCount++)
         {
             int index = distinctCount - 1;
-            WorldStateId state = new(checked((uint)index));
-            Assert.Equal(SectionWriteResult.Changed, section.TrySet(SectionCandidateFixture.ToLocal(index, side), state));
+            BlockStateId state = new(checked((uint)index));
+            Assert.Equal(SectionWriteResult.Changed, section.TrySet(SectionCandidateFixture.ToLocal(new LocalIndex(index), geometry), state));
 
             SectionStorageMetrics metrics = section.GetStorageMetrics();
             if (distinctCount <= 256)
@@ -72,8 +72,8 @@ public sealed class SectionBlockStatesTests
             for (int expectedIndex = 0; expectedIndex < distinctCount; expectedIndex++)
             {
                 Assert.Equal(
-                    new WorldStateId(checked((uint)expectedIndex)),
-                    section.Get(SectionCandidateFixture.ToLocal(expectedIndex, side)));
+                    new BlockStateId(checked((uint)expectedIndex)),
+                    section.Get(SectionCandidateFixture.ToLocal(new LocalIndex(expectedIndex), geometry)));
             }
         }
     }
@@ -85,7 +85,7 @@ public sealed class SectionBlockStatesTests
     {
         SectionGeometry geometry = Geometry(side);
         MutableSectionBlockStates section = new(geometry, default, SectionRevision.Initial);
-        WorldStateId[] expected = new WorldStateId[section.Count];
+        BlockStateId[] expected = new BlockStateId[section.Count];
         ulong random = 0xA0761D6478BD642FUL;
         long changed = 0;
 
@@ -99,8 +99,8 @@ public sealed class SectionBlockStatesTests
                 1 => uint.MaxValue,
                 _ => checked((uint)(Next(ref random) % 400UL)),
             };
-            WorldStateId state = new(value);
-            SectionWriteResult result = section.TrySet(SectionCandidateFixture.ToLocal(index, side), state);
+            BlockStateId state = new(value);
+            SectionWriteResult result = section.TrySet(SectionCandidateFixture.ToLocal(new LocalIndex(index), geometry), state);
             if (expected[index].Equals(state))
             {
                 Assert.Equal(SectionWriteResult.Unchanged, result);
@@ -113,7 +113,7 @@ public sealed class SectionBlockStatesTests
             }
         }
 
-        WorldStateId[] actual = new WorldStateId[section.Count];
+        BlockStateId[] actual = new BlockStateId[section.Count];
         section.CopyTo(actual);
         Assert.Equal(expected, actual);
         Assert.Equal(new SectionRevision(changed), section.Revision);
@@ -126,7 +126,7 @@ public sealed class SectionBlockStatesTests
         MutableSectionBlockStates section = new(geometry, default, default);
         LocalBlock edited = geometry.CreateLocal(3, 4, 5);
 
-        Assert.Equal(SectionWriteResult.Changed, section.TrySet(edited, new WorldStateId(9)));
+        Assert.Equal(SectionWriteResult.Changed, section.TrySet(edited, new BlockStateId(9)));
         Assert.Equal(SectionWriteResult.Changed, section.TrySet(edited, default));
 
         SectionStorageMetrics metrics = section.GetStorageMetrics();
@@ -139,48 +139,48 @@ public sealed class SectionBlockStatesTests
     public void SnapshotCompactsSortsAndRemainsImmutable()
     {
         SectionGeometry geometry = SectionGeometry.Side16;
-        MutableSectionBlockStates section = new(geometry, new WorldStateId(50), default);
+        MutableSectionBlockStates section = new(geometry, new BlockStateId(50), default);
         LocalBlock first = geometry.CreateLocal(0, 0, 0);
         LocalBlock second = geometry.CreateLocal(1, 0, 0);
-        _ = section.TrySet(first, new WorldStateId(100));
-        _ = section.TrySet(second, new WorldStateId(5));
+        _ = section.TrySet(first, new BlockStateId(100));
+        _ = section.TrySet(second, new BlockStateId(5));
 
         SectionBlockStateSnapshot snapshot = section.CaptureSnapshot();
-        WorldStateId[] before = new WorldStateId[snapshot.Count];
+        BlockStateId[] before = new BlockStateId[snapshot.Count];
         snapshot.CopyTo(before);
         Assert.Equal(SectionBlockStorageKind.Paletted, snapshot.StorageKind);
         Assert.Equal(0, snapshot.GetStorageMetrics().ReverseLookupEntryCount);
         Assert.Equal([5U, 50U, 100U], GetSnapshotPalette(snapshot));
 
-        _ = section.TrySet(first, new WorldStateId(200));
-        _ = section.TrySet(second, new WorldStateId(200));
-        WorldStateId[] after = new WorldStateId[snapshot.Count];
+        _ = section.TrySet(first, new BlockStateId(200));
+        _ = section.TrySet(second, new BlockStateId(200));
+        BlockStateId[] after = new BlockStateId[snapshot.Count];
         snapshot.CopyTo(after);
 
         Assert.Equal(before, after);
-        Assert.Equal(new WorldStateId(100), snapshot.Get(first));
-        Assert.Equal(new WorldStateId(5), snapshot.Get(second));
+        Assert.Equal(new BlockStateId(100), snapshot.Get(first));
+        Assert.Equal(new BlockStateId(5), snapshot.Get(second));
     }
 
     [Fact]
     public void PalettedSnapshotOwnsSemanticInputAndCanonicalizesPalette()
     {
-        WorldStateId[] semantic = SectionCandidateFixture.CreateStates(
+        BlockStateId[] semantic = SectionCandidateFixture.CreateStates(
             SectionGeometry.Side16,
             SectionFixtureKind.PaletteBoundary,
             paletteSize: 3);
-        semantic[0] = new WorldStateId(99);
-        semantic[1] = new WorldStateId(1);
-        semantic[2] = new WorldStateId(50);
-        WorldStateId[] expected = (WorldStateId[])semantic.Clone();
+        semantic[0] = new BlockStateId(99);
+        semantic[1] = new BlockStateId(1);
+        semantic[2] = new BlockStateId(50);
+        BlockStateId[] expected = (BlockStateId[])semantic.Clone();
 
         SectionBlockStateSnapshot snapshot = SectionBlockStateSnapshot.Create(
             SectionGeometry.Side16,
             new SectionRevision(7),
             semantic);
-        Array.Fill(semantic, new WorldStateId(uint.MaxValue));
+        Array.Fill(semantic, new BlockStateId(uint.MaxValue));
 
-        WorldStateId[] actual = new WorldStateId[expected.Length];
+        BlockStateId[] actual = new BlockStateId[expected.Length];
         snapshot.CopyTo(actual);
         Assert.Equal(expected, actual);
         Assert.Equal(SectionBlockStorageKind.Paletted, snapshot.StorageKind);
@@ -190,10 +190,10 @@ public sealed class SectionBlockStatesTests
     [Fact]
     public void DirectSnapshotNeverAliasesCallerArray()
     {
-        WorldStateId[] semantic = SectionCandidateFixture.CreateStates(
+        BlockStateId[] semantic = SectionCandidateFixture.CreateStates(
             SectionGeometry.Side16,
             SectionFixtureKind.HighEntropy);
-        WorldStateId[] expected = (WorldStateId[])semantic.Clone();
+        BlockStateId[] expected = (BlockStateId[])semantic.Clone();
 
         SectionBlockStateSnapshot snapshot = SectionBlockStateSnapshot.Create(
             SectionGeometry.Side16,
@@ -201,7 +201,7 @@ public sealed class SectionBlockStatesTests
             semantic);
         Array.Fill(semantic, default);
 
-        WorldStateId[] actual = new WorldStateId[expected.Length];
+        BlockStateId[] actual = new BlockStateId[expected.Length];
         snapshot.CopyTo(actual);
         Assert.Equal(expected, actual);
         Assert.Equal(SectionBlockStorageKind.Direct, snapshot.StorageKind);
@@ -210,15 +210,15 @@ public sealed class SectionBlockStatesTests
     [Fact]
     public void LowerLevelCanonicalPalettePathRejectsUnsortedDuplicateOrMissingValues()
     {
-        WorldStateId[] states = [.. Enumerable.Repeat(new WorldStateId(1), 4096)];
-        states[1] = new WorldStateId(2);
+        BlockStateId[] states = [.. Enumerable.Repeat(new BlockStateId(1), 4096)];
+        states[1] = new BlockStateId(2);
 
-        _ = Assert.Throws<ArgumentException>(() => PalettedBlockStateStorage.FromCanonical(states, [new WorldStateId(2), new WorldStateId(1)]));
-        _ = Assert.Throws<ArgumentException>(() => PalettedBlockStateStorage.FromCanonical(states, [new WorldStateId(1), new WorldStateId(1)]));
-        _ = Assert.Throws<ArgumentException>(() => PalettedBlockStateStorage.FromCanonical(states, [new WorldStateId(1), new WorldStateId(3)]));
+        _ = Assert.Throws<ArgumentException>(() => PalettedBlockStateStorage.FromCanonical(states, [new BlockStateId(2), new BlockStateId(1)]));
+        _ = Assert.Throws<ArgumentException>(() => PalettedBlockStateStorage.FromCanonical(states, [new BlockStateId(1), new BlockStateId(1)]));
+        _ = Assert.Throws<ArgumentException>(() => PalettedBlockStateStorage.FromCanonical(states, [new BlockStateId(1), new BlockStateId(3)]));
         _ = Assert.Throws<ArgumentException>(() => PalettedBlockStateStorage.FromCanonical(
             states,
-            [new WorldStateId(1), new WorldStateId(2), new WorldStateId(3)]));
+            [new BlockStateId(1), new BlockStateId(2), new BlockStateId(3)]));
     }
 
     [Fact]
@@ -228,8 +228,8 @@ public sealed class SectionBlockStatesTests
         MutableSectionBlockStates section = new(geometry, default, default);
         LocalBlock first = geometry.CreateLocal(1, 0, 0);
         LocalBlock second = geometry.CreateLocal(2, 0, 0);
-        _ = section.TrySet(first, new WorldStateId(1));
-        _ = section.TrySet(second, new WorldStateId(2));
+        _ = section.TrySet(first, new BlockStateId(1));
+        _ = section.TrySet(second, new BlockStateId(2));
         _ = section.TrySet(first, default);
         _ = section.TrySet(second, default);
 
@@ -246,16 +246,16 @@ public sealed class SectionBlockStatesTests
         MutableSectionBlockStates section = new(geometry, default, default);
         for (int index = 1; index <= 256; index++)
         {
-            _ = section.TrySet(SectionCandidateFixture.ToLocal(index, 16), new WorldStateId(checked((uint)index)));
+            _ = section.TrySet(SectionCandidateFixture.ToLocal(new LocalIndex(index), geometry), new BlockStateId(checked((uint)index)));
         }
 
         Assert.Equal(SectionBlockStorageKind.Direct, section.StorageKind);
         SectionBlockStateSnapshot snapshot = section.CaptureSnapshot();
-        LocalBlock edited = SectionCandidateFixture.ToLocal(1, 16);
-        _ = section.TrySet(edited, new WorldStateId(999));
+        LocalBlock edited = SectionCandidateFixture.ToLocal(new LocalIndex(1), geometry);
+        _ = section.TrySet(edited, new BlockStateId(999));
 
         Assert.Equal(SectionBlockStorageKind.Direct, snapshot.StorageKind);
-        Assert.Equal(new WorldStateId(1), snapshot.Get(edited));
+        Assert.Equal(new BlockStateId(1), snapshot.Get(edited));
     }
 
     [Fact]
@@ -265,12 +265,12 @@ public sealed class SectionBlockStatesTests
         MutableSectionBlockStates section = new(geometry, default, default);
         for (int index = 1; index <= 256; index++)
         {
-            _ = section.TrySet(SectionCandidateFixture.ToLocal(index, 16), new WorldStateId(checked((uint)index)));
+            _ = section.TrySet(SectionCandidateFixture.ToLocal(new LocalIndex(index), geometry), new BlockStateId(checked((uint)index)));
         }
 
         for (int index = 1; index <= 256; index++)
         {
-            _ = section.TrySet(SectionCandidateFixture.ToLocal(index, 16), default);
+            _ = section.TrySet(SectionCandidateFixture.ToLocal(new LocalIndex(index), geometry), default);
         }
 
         Assert.Equal(SectionBlockStorageKind.Direct, section.StorageKind);
@@ -290,13 +290,13 @@ public sealed class SectionBlockStatesTests
         {
             Assert.Equal(
                 SectionWriteResult.Changed,
-                section.TrySet(SectionCandidateFixture.ToLocal(index, 16), new WorldStateId(checked((uint)index))));
+                section.TrySet(SectionCandidateFixture.ToLocal(new LocalIndex(index), geometry), new BlockStateId(checked((uint)index))));
         }
 
         Assert.Equal(SectionBlockStorageKind.Paletted, section.StorageKind);
         Assert.Equal(256, section.GetStorageMetrics().PaletteEntryCount);
-        LocalBlock attempted = SectionCandidateFixture.ToLocal(256, 16);
-        Assert.Equal(SectionWriteResult.RevisionExhausted, section.TrySet(attempted, new WorldStateId(256)));
+        LocalBlock attempted = SectionCandidateFixture.ToLocal(new LocalIndex(256), geometry);
+        Assert.Equal(SectionWriteResult.RevisionExhausted, section.TrySet(attempted, new BlockStateId(256)));
         Assert.Equal(SectionBlockStorageKind.Paletted, section.StorageKind);
         Assert.Equal(256, section.GetStorageMetrics().PaletteEntryCount);
         Assert.Equal(default, section.Get(attempted));
@@ -307,12 +307,12 @@ public sealed class SectionBlockStatesTests
     public void ExhaustedRevisionRefusesChangeAtomically()
     {
         SectionGeometry geometry = SectionGeometry.Side16;
-        MutableSectionBlockStates section = new(geometry, new WorldStateId(1), new SectionRevision(long.MaxValue));
+        MutableSectionBlockStates section = new(geometry, new BlockStateId(1), new SectionRevision(long.MaxValue));
         LocalBlock local = geometry.CreateLocal(4, 5, 6);
 
-        Assert.Equal(SectionWriteResult.Unchanged, section.TrySet(local, new WorldStateId(1)));
-        Assert.Equal(SectionWriteResult.RevisionExhausted, section.TrySet(local, new WorldStateId(2)));
-        Assert.Equal(new WorldStateId(1), section.Get(local));
+        Assert.Equal(SectionWriteResult.Unchanged, section.TrySet(local, new BlockStateId(1)));
+        Assert.Equal(SectionWriteResult.RevisionExhausted, section.TrySet(local, new BlockStateId(2)));
+        Assert.Equal(new BlockStateId(1), section.Get(local));
         Assert.Equal(SectionBlockStorageKind.Uniform, section.StorageKind);
         Assert.Equal(new SectionRevision(long.MaxValue), section.Revision);
     }
@@ -323,11 +323,11 @@ public sealed class SectionBlockStatesTests
     public void CopyToValidatesLengthAndUsesXThenZThenYOrder(int side)
     {
         SectionGeometry geometry = Geometry(side);
-        WorldStateId[] expected = SectionCandidateFixture.CreateStates(geometry, SectionFixtureKind.HighEntropy);
+        BlockStateId[] expected = SectionCandidateFixture.CreateStates(geometry, SectionFixtureKind.HighEntropy);
         MutableSectionBlockStates section = SectionCandidateFixture.CreateSection(geometry, expected);
-        WorldStateId[] tooShort = new WorldStateId[section.Count - 1];
-        WorldStateId sentinel = new(uint.MaxValue);
-        WorldStateId[] oversized = [.. Enumerable.Repeat(sentinel, section.Count + 3)];
+        BlockStateId[] tooShort = new BlockStateId[section.Count - 1];
+        BlockStateId sentinel = new(uint.MaxValue);
+        BlockStateId[] oversized = [.. Enumerable.Repeat(sentinel, section.Count + 3)];
 
         _ = Assert.Throws<ArgumentException>(() => section.CopyTo(tooShort));
         section.CopyTo(oversized);
@@ -353,11 +353,11 @@ public sealed class SectionBlockStatesTests
         SectionGeometry geometry = SectionGeometry.Side16;
         MutableSectionBlockStates uniform = new(geometry, default, default);
         MutableSectionBlockStates paletted = new(geometry, default, default);
-        _ = paletted.TrySet(geometry.CreateLocal(1, 2, 3), new WorldStateId(1));
+        _ = paletted.TrySet(geometry.CreateLocal(1, 2, 3), new BlockStateId(1));
         MutableSectionBlockStates direct = new(geometry, default, default);
         for (int index = 1; index <= 256; index++)
         {
-            _ = direct.TrySet(SectionCandidateFixture.ToLocal(index, 16), new WorldStateId(checked((uint)index)));
+            _ = direct.TrySet(SectionCandidateFixture.ToLocal(new LocalIndex(index), geometry), new BlockStateId(checked((uint)index)));
         }
 
         IReadOnlySectionBlockStates[] candidates =
@@ -369,7 +369,7 @@ public sealed class SectionBlockStatesTests
             paletted.CaptureSnapshot(),
             direct.CaptureSnapshot(),
         ];
-        WorldStateId[] destination = new WorldStateId[uniform.Count];
+        BlockStateId[] destination = new BlockStateId[uniform.Count];
         LocalBlock local = geometry.CreateLocal(7, 8, 9);
 
         uint warmupChecksum = 0;
@@ -459,7 +459,7 @@ public sealed class SectionBlockStatesTests
         object storage = storageField.GetValue(snapshot) ?? throw new InvalidOperationException("Snapshot storage is missing.");
         FieldInfo paletteField = storage.GetType().GetField("_palette", BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException("Palette field is missing.");
-        WorldStateId[] palette = (WorldStateId[])(paletteField.GetValue(storage) ?? throw new InvalidOperationException("Palette is missing."));
+        BlockStateId[] palette = (BlockStateId[])(paletteField.GetValue(storage) ?? throw new InvalidOperationException("Palette is missing."));
         int count = snapshot.GetStorageMetrics().PaletteEntryCount;
         return [.. palette[..count].Select(value => value.Value)];
     }

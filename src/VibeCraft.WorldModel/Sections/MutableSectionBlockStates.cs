@@ -10,11 +10,11 @@ internal sealed class MutableSectionBlockStates : IReadOnlySectionBlockStates
 
     internal MutableSectionBlockStates(
         SectionGeometry geometry,
-        WorldStateId initialState,
+        BlockStateId initialState,
         SectionRevision revision)
     {
         Geometry = ValidateGeometry(geometry);
-        Count = checked(Geometry.Side.Value * Geometry.Side.Value * Geometry.Side.Value);
+        Count = Geometry.Volume;
         Revision = revision;
         _storage = new UniformBlockStateStorage(Count, initialState);
     }
@@ -27,12 +27,12 @@ internal sealed class MutableSectionBlockStates : IReadOnlySectionBlockStates
 
     public SectionBlockStorageKind StorageKind => _storage.Kind;
 
-    public WorldStateId Get(LocalBlock local)
+    public BlockStateId Get(LocalBlock local)
     {
-        return _storage.Get(Geometry.GetLinearIndex(local));
+        return _storage.Get(Geometry.GetLocalIndex(local));
     }
 
-    public void CopyTo(Span<WorldStateId> destination)
+    public void CopyTo(Span<BlockStateId> destination)
     {
         if (destination.Length < Count)
         {
@@ -47,9 +47,9 @@ internal sealed class MutableSectionBlockStates : IReadOnlySectionBlockStates
         return _storage.GetMetrics();
     }
 
-    internal SectionWriteResult TrySet(LocalBlock local, WorldStateId state)
+    internal SectionWriteResult TrySet(LocalBlock local, BlockStateId state)
     {
-        int index = Geometry.GetLinearIndex(local);
+        LocalIndex index = Geometry.GetLocalIndex(local);
         if (_storage.Get(index).Equals(state))
         {
             return SectionWriteResult.Unchanged;
@@ -68,7 +68,7 @@ internal sealed class MutableSectionBlockStates : IReadOnlySectionBlockStates
 
     internal SectionBlockStateSnapshot CaptureSnapshot()
     {
-        WorldStateId[] states = new WorldStateId[Count];
+        BlockStateId[] states = new BlockStateId[Count];
         _storage.CopyTo(states);
         return SectionBlockStateSnapshot.Create(Geometry, Revision, states);
     }

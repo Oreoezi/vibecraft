@@ -6,7 +6,7 @@ namespace VibeCraft.Content;
 public readonly record struct ContentProvider
 {
     /// <summary>Initializes a provider with validated identity and fingerprint.</summary>
-    public ContentProvider(ContentKey key, ContentFingerprint fingerprint)
+    public ContentProvider(NamespacedContentId key, ContentFingerprint fingerprint)
     {
         key.ThrowIfInvalid();
         fingerprint.ThrowIfInvalid();
@@ -15,7 +15,7 @@ public readonly record struct ContentProvider
     }
 
     /// <summary>Gets the validated provider key.</summary>
-    public ContentKey Key { get; }
+    public NamespacedContentId Key { get; }
 
     /// <summary>Gets the validated provider fingerprint.</summary>
     public ContentFingerprint Fingerprint { get; }
@@ -44,7 +44,7 @@ public enum RequiredContentDiagnosticKind
 public readonly record struct RequiredContentDiagnostic
 {
     private RequiredContentDiagnostic(
-        ContentKey provider,
+        NamespacedContentId provider,
         RequiredContentDiagnosticKind kind,
         ContentFingerprint expected,
         ContentFingerprint? actual)
@@ -79,7 +79,7 @@ public readonly record struct RequiredContentDiagnostic
     }
 
     /// <summary>Gets the affected provider key.</summary>
-    public ContentKey Provider { get; }
+    public NamespacedContentId Provider { get; }
 
     /// <summary>Gets whether the provider is missing or mismatched.</summary>
     public RequiredContentDiagnosticKind Kind { get; }
@@ -90,13 +90,13 @@ public readonly record struct RequiredContentDiagnostic
     /// <summary>Gets the actual fingerprint when a provider was found.</summary>
     public ContentFingerprint? Actual { get; }
 
-    internal static RequiredContentDiagnostic Missing(ContentKey provider, ContentFingerprint expected)
+    internal static RequiredContentDiagnostic Missing(NamespacedContentId provider, ContentFingerprint expected)
     {
         return new RequiredContentDiagnostic(provider, RequiredContentDiagnosticKind.Missing, expected, null);
     }
 
     internal static RequiredContentDiagnostic Mismatched(
-        ContentKey provider,
+        NamespacedContentId provider,
         ContentFingerprint expected,
         ContentFingerprint actual)
     {
@@ -139,11 +139,11 @@ public static class RequiredContentLock
         ArgumentNullException.ThrowIfNull(requiredProviders);
         ArgumentNullException.ThrowIfNull(resolvedProviders);
 
-        ImmutableDictionary<ContentKey, ContentFingerprint> required = ToUniqueDictionary(requiredProviders, nameof(requiredProviders));
-        ImmutableDictionary<ContentKey, ContentFingerprint> resolved = ToUniqueDictionary(resolvedProviders, nameof(resolvedProviders));
+        ImmutableDictionary<NamespacedContentId, ContentFingerprint> required = ToUniqueDictionary(requiredProviders, nameof(requiredProviders));
+        ImmutableDictionary<NamespacedContentId, ContentFingerprint> resolved = ToUniqueDictionary(resolvedProviders, nameof(resolvedProviders));
         ImmutableArray<RequiredContentDiagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<RequiredContentDiagnostic>();
 
-        foreach ((ContentKey key, ContentFingerprint expected) in required.OrderBy(pair => pair.Key))
+        foreach ((NamespacedContentId key, ContentFingerprint expected) in required.OrderBy(pair => pair.Key))
         {
             if (!resolved.TryGetValue(key, out ContentFingerprint actual))
             {
@@ -158,7 +158,7 @@ public static class RequiredContentLock
         return new ContentLockValidation(diagnostics.ToImmutable());
     }
 
-    private static ImmutableDictionary<ContentKey, ContentFingerprint> ToUniqueDictionary(
+    private static ImmutableDictionary<NamespacedContentId, ContentFingerprint> ToUniqueDictionary(
         IEnumerable<ContentProvider> providers,
         string parameterName)
     {
@@ -167,7 +167,8 @@ public static class RequiredContentLock
             throw new ArgumentOutOfRangeException(parameterName, $"A required-content provider set may contain at most {MaxProviders} providers.");
         }
 
-        ImmutableDictionary<ContentKey, ContentFingerprint>.Builder result = ImmutableDictionary.CreateBuilder<ContentKey, ContentFingerprint>();
+        ImmutableDictionary<NamespacedContentId, ContentFingerprint>.Builder result =
+            ImmutableDictionary.CreateBuilder<NamespacedContentId, ContentFingerprint>();
         int inspectedCount = 0;
         foreach (ContentProvider provider in providers)
         {
