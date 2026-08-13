@@ -1,13 +1,30 @@
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
+using VibeCraft.G1.Benchmarks.Sections;
 
 namespace VibeCraft.G1.Benchmarks;
 
 internal static class Program
 {
-    public static void Main(string[] args)
+    public static int Main(string[] args)
     {
+        if (args.Length > 0 && string.Equals(args[0], "--section-memory-report", StringComparison.Ordinal))
+        {
+            return SectionRetainedMemoryReport.RunParent(args[1..]);
+        }
+
+        if (args.Length > 0 && string.Equals(args[0], "--section-memory-trial", StringComparison.Ordinal))
+        {
+            return SectionRetainedMemoryReport.RunChild(args[1..]);
+        }
+
+        if (args.Length > 0 && string.Equals(args[0], "--section-amplification-report", StringComparison.Ordinal))
+        {
+            return SectionAmplificationReport.Run(args[1..]);
+        }
+
         _ = BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
+        return 0;
     }
 }
 

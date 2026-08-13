@@ -8,6 +8,8 @@
     <PackageReference Include="BenchmarkDotNet" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="../../src/VibeCraft.Content/VibeCraft.Content.csproj" />
     <ProjectReference Include="../../src/VibeCraft.Primitives/VibeCraft.Primitives.csproj" />
+    <ProjectReference Include="../../src/VibeCraft.WorldModel/VibeCraft.WorldModel.csproj" />
   </ItemGroup>
 </Project>
