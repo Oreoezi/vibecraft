@@ -372,22 +372,41 @@ public sealed class SectionBlockStatesTests
         WorldStateId[] destination = new WorldStateId[uniform.Count];
         LocalBlock local = geometry.CreateLocal(7, 8, 9);
 
+        uint warmupChecksum = 0;
         foreach (IReadOnlySectionBlockStates candidate in candidates)
         {
-            _ = candidate.Get(local);
-            candidate.CopyTo(destination);
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            uint checksum = 0;
-            for (int iteration = 0; iteration < 64; iteration++)
+            for (int warmup = 0; warmup < 64; warmup++)
             {
-                checksum ^= candidate.Get(local).Value;
+                warmupChecksum ^= candidate.Get(local).Value;
                 candidate.CopyTo(destination);
-                checksum ^= destination[iteration].Value;
+                warmupChecksum ^= destination[warmup].Value;
+            }
+        }
+
+        Thread.Sleep(TimeSpan.FromMilliseconds(100));
+        GC.KeepAlive(warmupChecksum);
+
+        foreach (IReadOnlySectionBlockStates candidate in candidates)
+        {
+            uint checksum = 0;
+            long allocatedBytes = long.MaxValue;
+            // Tier promotion may allocate once on the test thread. A real hot-path allocation
+            // recurs and therefore cannot satisfy any of these bounded identical probes.
+            for (int probe = 0; probe < 8 && allocatedBytes != 0; probe++)
+            {
+                long before = GC.GetAllocatedBytesForCurrentThread();
+                for (int iteration = 0; iteration < 64; iteration++)
+                {
+                    checksum ^= candidate.Get(local).Value;
+                    candidate.CopyTo(destination);
+                    checksum ^= destination[iteration].Value;
+                }
+
+                allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
             }
 
-            long after = GC.GetAllocatedBytesForCurrentThread();
             GC.KeepAlive(checksum);
-            Assert.Equal(before, after);
+            Assert.Equal(0, allocatedBytes);
         }
     }
 

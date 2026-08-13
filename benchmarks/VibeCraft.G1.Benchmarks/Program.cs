@@ -8,6 +8,16 @@ internal static class Program
 {
     public static int Main(string[] args)
     {
+        if (args.Length > 0 && string.Equals(args[0], "--e1-report", StringComparison.Ordinal))
+        {
+            return E1CoreDataReport.Run(args[1..]);
+        }
+
+        if (args.Length > 0 && string.Equals(args[0], "--e1-memory-child", StringComparison.Ordinal))
+        {
+            return E1CoreDataReport.RunMemoryChild(args[1..]);
+        }
+
         if (args.Length > 0 && string.Equals(args[0], "--section-memory-report", StringComparison.Ordinal))
         {
             return SectionRetainedMemoryReport.RunParent(args[1..]);

@@ -61,5 +61,38 @@ jobs:
       - name: Run deterministic amplification-report smoke
         run: dotnet run --project benchmarks/VibeCraft.G1.Benchmarks/VibeCraft.G1.Benchmarks.csproj --configuration Release --no-build -- --section-amplification-report --smoke --clusters 2
 
+      - name: Run deterministic E1 report smoke
+        run: |
+          $output = Join-Path $env:RUNNER_TEMP 'vibecraft-e1'
+          dotnet run --project benchmarks/VibeCraft.G1.Benchmarks/VibeCraft.G1.Benchmarks.csproj --configuration Release --no-build -- --e1-report --profile ci --output $output
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $report = Get-Content (Join-Path $output 'e1-core-data-observation.json') -Raw | ConvertFrom-Json
+          if ($report.evidenceClassification -ne 'observational' -or $report.disposition -ne 'defer' -or $report.run.completed -ne $true) {
+            throw 'The E1 smoke report did not complete with its required observational defer result.'
+          }
+          if ($report.fixtureId -ne 'VC-G1-E1-SECTIONS-0.1.0' -or $report.g0FixtureId -ne 'VC-G0-FP-0.1.0' -or $report.projectionFixtureId -ne 'VC-G1-E1-LOGICAL-PROJECTION-0.1.0' -or $report.seed -ne '0x5643424654314531') {
+            throw 'The E1 smoke report fixture identity changed.'
+          }
+          if ($report.indexingValidation.succeeded -ne $true -or @($report.paletteBoundaryDiagnostics).Count -ne 17 -or @($report.retainedMemory.trials).Count -ne 12 -or @($report.retainedMemory.modeSummaries).Count -ne 12 -or $report.rawObservationArtifact.observationCount -ne 288) {
+            throw 'The E1 smoke report did not produce the fixed integration evidence shape.'
+          }
+          $rawPath = Join-Path $output $report.rawObservationArtifact.path
+          if (-not (Test-Path $rawPath) -or (Get-FileHash $rawPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $report.rawObservationArtifact.sha256) {
+            throw 'The E1 raw observation artifact is missing or has the wrong digest.'
+          }
+          if ($report.corpusFingerprints.oneSide32 -ne '49693095424177a59ff75c79d3f08d5ff06056670e8441ed8d330cf198ea78b2' -or $report.corpusFingerprints.eightSide16 -ne 'd4e4ad87aafa6ccf3786544f44a0533570694eabd50bd4639cb3c7a427da4140') {
+            throw 'The E1 smoke corpus fingerprint changed.'
+          }
+          $snapshotDefinition = @($report.metricDefinitions | Where-Object { $_.name -eq 'section-side/snapshot' })
+          if ($snapshotDefinition.Count -ne 1 -or $snapshotDefinition[0].definition -notlike 'snapshot creation only:*outside the timed interval') {
+            throw 'The E1 snapshot metric is not explicitly isolated from semantic reconstruction.'
+          }
+          foreach ($criterionName in @('semantic-and-projection-correctness', 'zero-allocation-warmed-reads', 'positive-measured-durations')) {
+            $criterion = @($report.provisionalAssessment.criteria | Where-Object { $_.name -eq $criterionName })
+            if ($criterion.Count -ne 1 -or $criterion[0].status -ne 'pass') {
+              throw "The required E1 smoke criterion '$criterionName' did not pass."
+            }
+          }
+
       - name: Verify formatting
         run: dotnet format VibeCraft.slnx --no-restore --verify-no-changes
