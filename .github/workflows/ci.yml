@@ -63,6 +63,10 @@ jobs:
 
       - name: Run deterministic E1 report smoke
         run: |
+          function Fail-E1([string] $message) {
+            Write-Output "::error title=E1-r1 smoke::$message"
+            throw $message
+          }
           $output = Join-Path $env:RUNNER_TEMP 'vibecraft-e1'
           $invalidRuntimeOutput = Join-Path $env:RUNNER_TEMP 'vibecraft-e1-invalid-runtime'
           $env:VIBECRAFT_E1_STABLE_RUNTIME = '1'
@@ -75,17 +79,17 @@ jobs:
           Remove-Item Env:DOTNET_TieredPGO
           $invalidPartialPattern = ".$(Split-Path $invalidRuntimeOutput -Leaf).partial-*"
           if ($invalidRuntimeStatus -eq 0 -or (Test-Path $invalidRuntimeOutput) -or @(Get-ChildItem (Split-Path $invalidRuntimeOutput -Parent) -Directory -Filter $invalidPartialPattern).Count -ne 0) {
-            throw 'E1-r1 accepted or published evidence under a nonconforming runtime.'
+            Fail-E1 'E1-r1 accepted or published evidence under a nonconforming runtime.'
           }
           $global:LASTEXITCODE = 0
           dotnet run --project benchmarks/VibeCraft.G1.Benchmarks/VibeCraft.G1.Benchmarks.csproj --configuration Release --no-build -- --e1-report --profile ci --output $output
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) { Fail-E1 "The E1-r1 CI report process exited with code $LASTEXITCODE." }
           $report = Get-Content (Join-Path $output 'e1-r1-core-data-diagnostic.json') -Raw | ConvertFrom-Json
           if ($report.schema -ne 'vibecraft.g1.e1.diagnostic.v2' -or $report.protocolId -ne 'VC-G1-E1-PROTOCOL-1.0.0' -or $report.evidenceClassification -ne 'diagnostic' -or $report.disposition -ne 'defer' -or $report.run.completed -ne $true) {
-            throw 'The E1-r1 smoke report did not complete with its required diagnostic defer result.'
+            Fail-E1 'The E1-r1 smoke report did not complete with its required diagnostic defer result.'
           }
           if ($report.manifest.evidenceClassification -ne 'diagnostic' -or $report.diagnosticAssessment.performanceDecisionEligible -ne $false -or $report.protocol.decisionEligible -ne $false) {
-            throw 'The E1-r1 smoke report contains inconsistent decision authority or evidence classification.'
+            Fail-E1 'The E1-r1 smoke report contains inconsistent decision authority or evidence classification.'
           }
           $expectedWorkloads = @(
             'equal-volume fresh-process retained memory by homogeneous, layered, mixed, and high-entropy distribution',
@@ -108,55 +112,55 @@ jobs:
             'source and binary identities'
           )
           if ($report.protocol.id -ne 'VC-G1-E1-PROTOCOL-1.0.0' -or $report.protocol.profile -ne 'ci' -or $report.protocol.decisionAuthority -ne 'Issue #31 after explicit owner acceptance of the G0 fixture; E1-r1 diagnostics cannot select or freeze a candidate.' -or (@($report.protocol.workloads) -join '|') -ne ($expectedWorkloads -join '|') -or $report.protocol.addressPreparation -ne 'Global fixture positions are converted to SectionIndex and LocalIndex before measurement; dense and adaptive candidates consume the same addressed trace and section layout.') {
-            throw 'The E1-r1 structured protocol declaration changed.'
+            Fail-E1 'The E1-r1 structured protocol declaration changed.'
           }
           if (@($report.protocol.warmupRepetitions.PSObject.Properties).Count -ne 7 -or $report.protocol.warmupRepetitions.broadReadPath -ne 64 -or $report.protocol.warmupRepetitions.perSampleReadTiming -ne 4 -or $report.protocol.warmupRepetitions.perSampleReadAllocation -ne 4 -or $report.protocol.warmupRepetitions.snapshot -ne 1 -or $report.protocol.warmupRepetitions.logicalProjection -ne 1 -or $report.protocol.warmupRepetitions.edit -ne 1 -or $report.protocol.warmupRepetitions.retainedMemoryCorpus -ne 1) {
-            throw 'The E1-r1 warmup protocol changed.'
+            Fail-E1 'The E1-r1 warmup protocol changed.'
           }
           if (@($report.protocol.repetitions.PSObject.Properties).Count -ne 7 -or $report.protocol.repetitions.corpusCubes -ne 8 -or $report.protocol.repetitions.performanceCubes -ne 8 -or $report.protocol.repetitions.pairedRounds -ne 1 -or $report.protocol.repetitions.additionalThresholdCrossingRounds -ne 0 -or $report.protocol.repetitions.freshProcessMemoryTrialsPerModeDistribution -ne 1 -or $report.protocol.repetitions.editClustersPerTrace -ne 16 -or $report.protocol.repetitions.bootstrapResamples -ne 100) {
-            throw 'The E1-r1 CI repetition protocol changed.'
+            Fail-E1 'The E1-r1 CI repetition protocol changed.'
           }
           if (@($report.protocol.thresholds.PSObject.Properties).Count -ne 10 -or $report.protocol.thresholds.adaptiveHomogeneousLayeredMixedRetainedMemoryUpper95 -ne 0.50 -or $report.protocol.thresholds.adaptiveHighEntropyRetainedMemoryUpper95 -ne 1.10 -or $report.protocol.thresholds.adaptiveAddressedTimingUpper95 -ne 1.15 -or $report.protocol.thresholds.warmedReadAllocatedBytes -ne 0 -or $report.protocol.thresholds.side32RetainedMemoryUpper95 -ne 0.80 -or $report.protocol.thresholds.side32StrongPrimaryUpper95 -ne 0.80 -or $report.protocol.thresholds.side32MaximumPrimaryUpper95 -ne 1.15 -or $report.protocol.thresholds.side16PrimaryGeometricMean -ne 1.15 -or $report.protocol.thresholds.side16MaximumPrimaryUpper95 -ne 1.25 -or $report.protocol.thresholds.logicalAndUniqueHaloAmplificationP95 -ne 2.0) {
-            throw 'The E1-r1 diagnostic thresholds changed.'
+            Fail-E1 'The E1-r1 diagnostic thresholds changed.'
           }
           if (@($report.protocol.samplePolicy.PSObject.Properties).Count -ne 4 -or $report.protocol.samplePolicy.statisticalUnit -ne 'raw unit: one same-cube, same-round ordered pair; decision unit: one cube median across all its rounds/traces in the grouped category; bootstrap resamples cube-level units' -or $report.protocol.samplePolicy.outliers -ne 'No raw timing or amplification outlier is removed.' -or $report.protocol.samplePolicy.invalidMemory -ne 'Negative or failed fresh-process retained-memory trials remain in raw evidence, are excluded from ratios, and make the affected criterion inconclusive.' -or $report.protocol.samplePolicy.nonpositiveTiming -ne 'The raw sample remains recorded; no ratio is synthesized and the affected diagnostic is inconclusive.') {
-            throw 'The E1-r1 invalid-sample policy changed.'
+            Fail-E1 'The E1-r1 invalid-sample policy changed.'
           }
           if (@($report.protocol.runtime.PSObject.Properties).Count -ne 4 -or $report.protocol.runtime.configuration -ne 'Release' -or $report.protocol.runtime.jit -ne 'DOTNET_TieredCompilation=0; DOTNET_TieredPGO=0; enforced by a fresh report child process' -or $report.protocol.runtime.timer -ne 'Stopwatch.GetTimestamp' -or $report.protocol.runtime.allocation -ne 'GC.GetAllocatedBytesForCurrentThread on a checksum-matched independent probe' -or (@($report.protocol.requiredHostMetadata) -join '|') -ne ($expectedHostMetadata -join '|')) {
-            throw 'The E1-r1 runtime or host-metadata protocol changed.'
+            Fail-E1 'The E1-r1 runtime or host-metadata protocol changed.'
           }
           if ($report.manifest.assemblyConfiguration -ne $report.protocol.runtime.configuration -or $report.manifest.dotnetTieredCompilation -ne '0' -or $report.manifest.dotnetTieredPgo -ne '0') {
-            throw 'The E1-r1 captured runtime does not satisfy its declared fixed-runtime contract.'
+            Fail-E1 'The E1-r1 captured runtime does not satisfy its declared fixed-runtime contract.'
           }
           if ($report.fixtureId -ne 'VC-G1-E1-SECTIONS-1.0.0' -or $report.g0FixtureId -ne 'VC-G0-FP-0.1.0' -or $report.projectionFixtureId -ne 'VC-G1-E1-LOGICAL-PROJECTION-0.1.0' -or $report.seed -ne '0x5643424654314531') {
-            throw 'The E1-r1 smoke report fixture identity changed.'
+            Fail-E1 'The E1-r1 smoke report fixture identity changed.'
           }
           if ($report.indexingValidation.succeeded -ne $true -or @($report.paletteBoundaryDiagnostics).Count -ne 17 -or @($report.retainedMemory.trials).Count -ne 12 -or @($report.retainedMemory.modeSummaries).Count -ne 12 -or $report.rawObservationArtifact.observationCount -ne 288) {
-            throw 'The E1-r1 smoke report did not produce the fixed integration evidence shape.'
+            Fail-E1 'The E1-r1 smoke report did not produce the fixed integration evidence shape.'
           }
           $rawPath = Join-Path $output $report.rawObservationArtifact.path
           if (-not (Test-Path $rawPath) -or (Get-FileHash $rawPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $report.rawObservationArtifact.sha256) {
-            throw 'The E1 raw observation artifact is missing or has the wrong digest.'
+            Fail-E1 'The E1 raw observation artifact is missing or has the wrong digest.'
           }
           if ($report.corpusFingerprints.oneSide32 -ne 'bb4281eb7110c12aa5e2a29e144608f009f2a1d6ff404e4cd36990190a366a42' -or $report.corpusFingerprints.eightSide16 -ne '4bd0a3ca41b795b4ca865710ee41b5d22983ce4bc80a3a13dbbe62ebc5ad1e20') {
-            throw 'The E1 smoke corpus fingerprint changed.'
+            Fail-E1 'The E1 smoke corpus fingerprint changed.'
           }
           $snapshotDefinition = @($report.metricDefinitions | Where-Object { $_.name -eq 'section-side/snapshot' })
           if ($snapshotDefinition.Count -ne 1 -or $snapshotDefinition[0].definition -notlike 'snapshot creation only:*outside the timed interval') {
-            throw 'The E1 snapshot metric is not explicitly isolated from semantic reconstruction.'
+            Fail-E1 'The E1 snapshot metric is not explicitly isolated from semantic reconstruction.'
           }
           if (@($report.diagnosticAssessment.criteria | Where-Object { $_.name -eq 'save-and-network-amplification' }).Count -ne 0) {
-            throw 'E1-r1 reintroduced the removed save/network prerequisite.'
+            Fail-E1 'E1-r1 reintroduced the removed save/network prerequisite.'
           }
           foreach ($criterionName in @('semantic-and-projection-correctness', 'zero-allocation-warmed-reads', 'positive-measured-durations', 'storage-neutral-logical-diagnostics')) {
             $criterion = @($report.diagnosticAssessment.criteria | Where-Object { $_.name -eq $criterionName })
             if ($criterion.Count -ne 1 -or $criterion[0].status -ne 'pass') {
-              throw "The required E1-r1 smoke criterion '$criterionName' did not pass."
+              Fail-E1 "The required E1-r1 smoke criterion '$criterionName' did not pass."
             }
           }
           $evidenceNames = @('e1-r1-core-data-diagnostic.json', 'e1-r1-core-data-diagnostic.md', 'e1-r1-core-data-raw.ndjson')
           if (@(Get-ChildItem $output -File).Count -ne $evidenceNames.Count) {
-            throw 'The E1-r1 evidence set was not published as exactly three files.'
+            Fail-E1 'The E1-r1 evidence set was not published as exactly three files.'
           }
           $publishedHashes = @{}
           foreach ($evidenceName in $evidenceNames) {
@@ -164,17 +168,17 @@ jobs:
           }
           dotnet run --project benchmarks/VibeCraft.G1.Benchmarks/VibeCraft.G1.Benchmarks.csproj --configuration Release --no-build -- --e1-report --profile ci --output $output
           if ($LASTEXITCODE -eq 0) {
-            throw 'E1-r1 silently overwrote an existing evidence set.'
+            Fail-E1 'E1-r1 silently overwrote an existing evidence set.'
           }
           $global:LASTEXITCODE = 0
           foreach ($evidenceName in $evidenceNames) {
             if ((Get-FileHash (Join-Path $output $evidenceName) -Algorithm SHA256).Hash -ne $publishedHashes[$evidenceName]) {
-              throw "The refused E1-r1 rerun modified '$evidenceName'."
+              Fail-E1 "The refused E1-r1 rerun modified '$evidenceName'."
             }
           }
           $partialPattern = ".$(Split-Path $output -Leaf).partial-*"
           if (@(Get-ChildItem (Split-Path $output -Parent) -Directory -Filter $partialPattern).Count -ne 0) {
-            throw 'The E1-r1 report left an unpublished staging directory behind.'
+            Fail-E1 'The E1-r1 report left an unpublished staging directory behind.'
           }
 
       - name: Verify formatting
