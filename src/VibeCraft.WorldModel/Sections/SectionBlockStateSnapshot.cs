@@ -55,6 +55,22 @@ internal sealed class SectionBlockStateSnapshot : IReadOnlySectionBlockStates, I
         return new SectionBlockStateSnapshot(validatedGeometry, revision, storage);
     }
 
+    internal static SectionBlockStateSnapshot CreateFromUniformStorage(
+        SectionGeometry geometry,
+        SectionRevision revision,
+        UniformBlockStateStorage uniformStorage)
+    {
+        return new SectionBlockStateSnapshot(geometry, revision, uniformStorage);
+    }
+
+    internal static SectionBlockStateSnapshot CreateFromDirectStorage(
+        SectionGeometry geometry,
+        SectionRevision revision,
+        DirectBlockStateStorage directStorage)
+    {
+        return new SectionBlockStateSnapshot(geometry, revision, directStorage.CloneForSnapshot());
+    }
+
     public SectionGeometry Geometry { get; }
 
     public SectionRevision Revision { get; }
@@ -65,7 +81,12 @@ internal sealed class SectionBlockStateSnapshot : IReadOnlySectionBlockStates, I
 
     public BlockStateId Get(LocalBlock local)
     {
-        return _storage.Get(Geometry.GetLocalIndex(local));
+        return Get(Geometry.GetLocalIndex(local));
+    }
+
+    public BlockStateId Get(LocalIndex index)
+    {
+        return GetBlockState(index);
     }
 
     public BlockStateId GetBlockState(LocalIndex index)

@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Globalization;
+using System.Reflection;
 using System.Runtime;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -15,7 +16,7 @@ using VibeCraft.WorldModel.Sections;
 namespace VibeCraft.G1.Benchmarks.Sections;
 
 /// <summary>
-/// Runs the predeclared G1/E1 equal-world-volume observation protocol.
+/// Runs the predeclared G1/E1-r1 equal-world-volume diagnostic protocol.
 /// </summary>
 /// <remarks>
 /// This runner deliberately reports fixture observations rather than a save, network, durable-state,
@@ -24,10 +25,17 @@ namespace VibeCraft.G1.Benchmarks.Sections;
 /// </remarks>
 internal static class E1CoreDataReport
 {
+    internal const string ProtocolId = "VC-G1-E1-PROTOCOL-1.0.0";
+    internal const string ReportSchema = "vibecraft.g1.e1.diagnostic.v2";
     internal const string G0FixtureId = "VC-G0-FP-0.1.0";
-    internal const string SectionFixtureId = "VC-G1-E1-SECTIONS-0.1.0";
+    internal const string SectionFixtureId = "VC-G1-E1-SECTIONS-1.0.0";
     internal const string ProjectionFixtureId = "VC-G1-E1-LOGICAL-PROJECTION-0.1.0";
-    internal const string SemanticFingerprintDomain = "VC-G1-E1-SEMANTIC-FP-0.1.0";
+    internal const string SemanticFingerprintDomain = "VC-G1-E1-SEMANTIC-FP-1.0.0";
+    internal const string CorpusFingerprintDomain = "VC-G1-E1-CORPUS-FP-1.0.0";
+    internal const string HistoricalBaselineCommit = "bc8117549935cf74d6fa3870e4364bfc05ee24ff";
+    internal const string HistoricalBaselineJsonSha256 = "239f7fcf0423de12f156f73fabaaa6bfda34dbc185988336dab9ed424ee99d06";
+    internal const string HistoricalBaselineMarkdownSha256 = "971205d601e1dc4c0fcfacb8b47a014c795ecb8542eaa026c6e5205456ad8ab1";
+    internal const string HistoricalBaselineRawSha256 = "2028eacc44cc9c9b3e45bd3b96d0235d7c7bd3f5959ead230ba31deb0131eb5f";
 
     private const ulong Seed = 0x5643424654314531UL;
     private const ulong CubeSeedStride = 0x9E3779B97F4A7C15UL;
@@ -35,6 +43,9 @@ internal static class E1CoreDataReport
     private const int CubeVolume = SectionEqualVolumeFixture.CubeVolume;
     private const int DenseValueBytes = sizeof(uint);
     private const long MaxRawObservationBytes = 512L * 1024 * 1024;
+    private const string JsonArtifactName = "e1-r1-core-data-diagnostic.json";
+    private const string MarkdownArtifactName = "e1-r1-core-data-diagnostic.md";
+    private const string RawArtifactName = "e1-r1-core-data-raw.ndjson";
     private const string StableRuntimeMarker = "VIBECRAFT_E1_STABLE_RUNTIME";
     private const long MaxRequestedBytes = 64L * 1024 * 1024 * 1024;
     private static readonly TimeSpan CiMemoryChildTimeout = TimeSpan.FromMinutes(5);
@@ -54,9 +65,10 @@ internal static class E1CoreDataReport
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
     };
 
-    /// <summary>Runs one bounded E1 observation profile and returns zero for every completed disposition.</summary>
+    /// <summary>Runs one bounded E1-r1 diagnostic profile and returns zero for every completed disposition.</summary>
     internal static int Run(string[] args)
     {
+        string? stagingOutputDirectory = null;
         try
         {
             if (!string.Equals(Environment.GetEnvironmentVariable(StableRuntimeMarker), "1", StringComparison.Ordinal))
@@ -65,6 +77,8 @@ internal static class E1CoreDataReport
             }
 
             E1Options options = E1Options.Parse(args);
+            ValidateRuntimeContract();
+            stagingOutputDirectory = CreateOutputStagingDirectory(options.OutputDirectory);
             ValidateFixtureIdentity();
             ValidateIndexContract();
             WarmReadMeasurementPaths();
@@ -72,20 +86,46 @@ internal static class E1CoreDataReport
             SectionObservationManifest manifest = SectionObservationManifest.Capture(
                 Seed,
                 Environment.CommandLine,
-                $"E1 {options.Profile} observational protocol; corpusCubes={options.CubeCount}; performanceCubes={options.PerformanceCubeCount}; rounds={options.PairedRounds}; clustersPerTrace={options.TotalClustersPerTrace}");
-            using RawObservationSink raw = new(options.OutputDirectory);
-            E1RunAccumulator accumulator = new(options, raw);
-            accumulator.RecordPaletteBoundaries();
-            accumulator.RunCorpus();
-            E1MemoryReport memory = RunFreshProcessMemory(options);
-            E1ReportDocument document = accumulator.CreateDocument(manifest, memory);
-            WriteReport(document, raw, options.OutputDirectory);
+                $"E1-r1 {options.Profile} diagnostic protocol; corpusCubes={options.CubeCount}; performanceCubes={options.PerformanceCubeCount}; rounds={options.PairedRounds}; clustersPerTrace={options.TotalClustersPerTrace}",
+                evidenceClassification: "diagnostic",
+                classificationReason: "Diagnostic only: G0 remains provisional, owner acceptance is absent, and issue #30 cannot select a candidate.");
+            using (RawObservationSink raw = new(stagingOutputDirectory))
+            {
+                E1RunAccumulator accumulator = new(options, raw);
+                accumulator.RecordPaletteBoundaries();
+                accumulator.RunCorpus();
+                E1MemoryReport memory = RunFreshProcessMemory(options);
+                E1ReportDocument document = accumulator.CreateDocument(manifest, memory);
+                WriteReport(document, raw, stagingOutputDirectory);
+            }
+
+            if (stagingOutputDirectory is not null)
+            {
+                Directory.Move(stagingOutputDirectory, options.OutputDirectory!);
+                stagingOutputDirectory = null;
+                Console.WriteLine($"Wrote diagnostic E1-r1 evidence to {options.OutputDirectory}");
+            }
+
             return 0;
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or InvalidDataException or IOException or JsonException or OverflowException or TimeoutException)
         {
             Console.Error.WriteLine($"E1 core-data report failed: {exception.Message}");
             return 1;
+        }
+        finally
+        {
+            if (stagingOutputDirectory is not null && Directory.Exists(stagingOutputDirectory))
+            {
+                try
+                {
+                    Directory.Delete(stagingOutputDirectory, recursive: true);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    Console.Error.WriteLine($"E1 core-data report could not remove its unpublished staging directory: {exception.Message}");
+                }
+            }
         }
     }
 
@@ -184,6 +224,46 @@ internal static class E1CoreDataReport
         }
     }
 
+    private static void ValidateRuntimeContract()
+    {
+        Assembly assembly = typeof(E1CoreDataReport).Assembly;
+        string configuration = assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration ?? "unknown";
+        string? tieredCompilation = Environment.GetEnvironmentVariable("DOTNET_TieredCompilation");
+        string? tieredPgo = Environment.GetEnvironmentVariable("DOTNET_TieredPGO");
+        if (!string.Equals(configuration, "Release", StringComparison.Ordinal) ||
+            !string.Equals(tieredCompilation, "0", StringComparison.Ordinal) ||
+            !string.Equals(tieredPgo, "0", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"E1-r1 requires a Release assembly with DOTNET_TieredCompilation=0 and DOTNET_TieredPGO=0; observed configuration={configuration}, DOTNET_TieredCompilation={tieredCompilation ?? "<unset>"}, DOTNET_TieredPGO={tieredPgo ?? "<unset>"}.");
+        }
+    }
+
+    private static string? CreateOutputStagingDirectory(string? outputDirectory)
+    {
+        if (outputDirectory is null)
+        {
+            return null;
+        }
+
+        if (Directory.Exists(outputDirectory) || File.Exists(outputDirectory))
+        {
+            throw new IOException($"Refusing to overwrite existing E1-r1 evidence set: {outputDirectory}");
+        }
+
+        string? parent = Path.GetDirectoryName(outputDirectory);
+        string name = Path.GetFileName(outputDirectory);
+        if (string.IsNullOrEmpty(parent) || string.IsNullOrEmpty(name))
+        {
+            throw new IOException($"The E1-r1 evidence output must name a new directory below an existing or creatable parent: {outputDirectory}");
+        }
+
+        _ = Directory.CreateDirectory(parent);
+        string staging = Path.Combine(parent, $".{name}.partial-{Guid.NewGuid():N}");
+        _ = Directory.CreateDirectory(staging);
+        return staging;
+    }
+
     private static void ValidateIndexContract()
     {
         foreach (SectionGeometry geometry in new[] { SectionGeometry.Side16, SectionGeometry.Side32 })
@@ -233,14 +313,23 @@ internal static class E1CoreDataReport
                 Seed ^ (ulong)distribution);
             MutableSectionBlockStates[] one32 = SectionEqualVolumeFixture.CreateSections(SectionEqualVolumeLayout.OneSide32, canonical);
             MutableSectionBlockStates[] eight16 = SectionEqualVolumeFixture.CreateSections(SectionEqualVolumeLayout.EightSide16, canonical);
+            BlockStateId[][] dense32 = SectionEqualVolumeFixture.CreateDenseSections(SectionEqualVolumeLayout.OneSide32, canonical);
+            BlockStateId[][] dense16 = SectionEqualVolumeFixture.CreateDenseSections(SectionEqualVolumeLayout.EightSide16, canonical);
+            SectionCellAddress[] random32 = SectionEqualVolumeFixture.CreateAddressTrace(SectionEqualVolumeLayout.OneSide32, randomTrace);
+            SectionCellAddress[] random16 = SectionEqualVolumeFixture.CreateAddressTrace(SectionEqualVolumeLayout.EightSide16, randomTrace);
+            int[] linearTrace = CreateLinearGlobalTrace();
+            SectionCellAddress[] linear32 = SectionEqualVolumeFixture.CreateAddressTrace(SectionEqualVolumeLayout.OneSide32, linearTrace);
+            SectionCellAddress[] linear16 = SectionEqualVolumeFixture.CreateAddressTrace(SectionEqualVolumeLayout.EightSide16, linearTrace);
             for (int iteration = 0; iteration < 64; iteration++)
             {
-                _ = ReadDenseRandom(canonical, randomTrace);
-                _ = ReadDenseLinear(canonical);
-                _ = ReadRandom(one32, SectionEqualVolumeLayout.OneSide32, randomTrace);
-                _ = ReadLinear(one32, SectionEqualVolumeLayout.OneSide32);
-                _ = ReadRandom(eight16, SectionEqualVolumeLayout.EightSide16, randomTrace);
-                _ = ReadLinear(eight16, SectionEqualVolumeLayout.EightSide16);
+                _ = ReadDense(dense32, random32, repeatCount: 1);
+                _ = ReadDense(dense16, random16, repeatCount: 1);
+                _ = ReadDense(dense32, linear32, repeatCount: 2);
+                _ = ReadDense(dense16, linear16, repeatCount: 2);
+                _ = ReadAdaptive(one32, random32, repeatCount: 1);
+                _ = ReadAdaptive(eight16, random16, repeatCount: 1);
+                _ = ReadAdaptive(one32, linear32, repeatCount: 2);
+                _ = ReadAdaptive(eight16, linear16, repeatCount: 2);
             }
         }
 
@@ -553,30 +642,57 @@ internal static class E1CoreDataReport
         }
 
         _ = Directory.CreateDirectory(outputDirectory);
-        string jsonPath = Path.Combine(outputDirectory, "e1-core-data-observation.json");
-        using (FileStream stream = File.Create(jsonPath))
+        string jsonPath = Path.Combine(outputDirectory, JsonArtifactName);
+        using (FileStream stream = new(jsonPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
         using (Utf8JsonWriter writer = new(stream, new JsonWriterOptions { Indented = true }))
         {
             WriteJson(writer, document, raw);
         }
 
-        string markdownPath = Path.Combine(outputDirectory, "e1-core-data-observation.md");
-        File.WriteAllText(markdownPath, ToMarkdown(document) + Environment.NewLine, Encoding.UTF8);
-        Console.WriteLine($"Wrote observational E1 evidence to {Path.GetFullPath(outputDirectory)}");
+        string markdownPath = Path.Combine(outputDirectory, MarkdownArtifactName);
+        using StreamWriter markdown = new(
+            new FileStream(markdownPath, FileMode.CreateNew, FileAccess.Write, FileShare.None),
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        markdown.Write(ToMarkdown(document));
+        markdown.WriteLine();
     }
 
     private static void WriteJson(Utf8JsonWriter writer, E1ReportDocument document, RawObservationSink raw)
     {
         writer.WriteStartObject();
-        writer.WriteString("schema", "vibecraft.g1.e1.observation.v1");
-        writer.WriteString("evidenceClassification", "observational");
+        writer.WriteString("schema", ReportSchema);
+        writer.WriteString("protocolId", ProtocolId);
+        writer.WriteString("evidenceClassification", "diagnostic");
         writer.WriteString("disposition", "defer");
         writer.WriteString("dispositionRationale", document.Decision.OverallRationale);
         writer.WriteString("fixtureId", SectionFixtureId);
         writer.WriteString("g0FixtureId", G0FixtureId);
         writer.WriteString("projectionFixtureId", ProjectionFixtureId);
         writer.WriteString("semanticFingerprintDomain", SemanticFingerprintDomain);
+        writer.WriteString("corpusFingerprintDomain", CorpusFingerprintDomain);
         writer.WriteString("seed", $"0x{Seed:X16}");
+        writer.WritePropertyName("historicalFailedBaseline");
+        writer.WriteStartObject();
+        writer.WriteString("reportSchema", "vibecraft.g1.e1.observation.v1");
+        writer.WriteString("sectionFixtureId", "VC-G1-E1-SECTIONS-0.1.0");
+        writer.WriteString("sourceCommit", HistoricalBaselineCommit);
+        writer.WriteString("disposition", "defer");
+        writer.WriteString("jsonArtifact", "artifacts/g1/e1/full-observational/e1-core-data-observation.json");
+        writer.WriteString("jsonSha256", HistoricalBaselineJsonSha256);
+        writer.WriteString("markdownArtifact", "artifacts/g1/e1/full-observational/e1-core-data-observation.md");
+        writer.WriteString("markdownSha256", HistoricalBaselineMarkdownSha256);
+        writer.WriteString("rawArtifact", "artifacts/g1/e1/full-observational/e1-core-data-raw.ndjson");
+        writer.WriteString("rawSha256", HistoricalBaselineRawSha256);
+        writer.WritePropertyName("failedCriteria");
+        writer.WriteStartArray();
+        writer.WriteStringValue("adaptive timing at side16 and side32");
+        writer.WriteStringValue("side32 retained memory");
+        writer.WriteStringValue("side32 primary metrics");
+        writer.WriteStringValue("side32 amplification");
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+        writer.WritePropertyName("protocol");
+        WriteProtocol(writer, document.Run);
         writer.WritePropertyName("run");
         JsonSerializer.Serialize(writer, document.Run, JsonOptions);
         writer.WritePropertyName("manifest");
@@ -595,13 +711,13 @@ internal static class E1CoreDataReport
         JsonSerializer.Serialize(writer, document.AmplificationSummaries, JsonOptions);
         writer.WritePropertyName("retainedMemory");
         JsonSerializer.Serialize(writer, document.Memory, JsonOptions);
-        writer.WritePropertyName("provisionalAssessment");
+        writer.WritePropertyName("diagnosticAssessment");
         JsonSerializer.Serialize(writer, document.Decision, JsonOptions);
         writer.WritePropertyName("rejectedAlternatives");
         writer.WriteStartArray();
-        writer.WriteStringValue("Freeze side16 from the architectural prior: rejected for this gate because the required G0 owner acceptance and real save/network measurements are absent.");
+        writer.WriteStringValue("Freeze side16 from the architectural prior: rejected for this issue because the required G0 owner acceptance is absent.");
         writer.WriteStringValue("Freeze side32 from lower section-object count: rejected because object count alone does not satisfy the paired memory, timing, and amplification rules.");
-        writer.WriteStringValue("Invent placeholder save or network encodings solely to complete this report: rejected because it would conflate the representation-neutral logical fixture with formats owned by later gates.");
+        writer.WriteStringValue("Add save or network encodings to G1: rejected because G2 owns persistence projection and G4A owns transport framing.");
         writer.WriteEndArray();
         writer.WritePropertyName("limitations");
         writer.WriteStartArray();
@@ -613,12 +729,99 @@ internal static class E1CoreDataReport
         writer.WriteEndObject();
     }
 
+    private static void WriteProtocol(Utf8JsonWriter writer, E1RunConfiguration run)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("id", ProtocolId);
+        writer.WriteString("profile", run.Profile.ToString().ToLowerInvariant());
+        writer.WriteBoolean("decisionEligible", false);
+        writer.WriteString("decisionAuthority", "Issue #31 after explicit owner acceptance of the G0 fixture; E1-r1 diagnostics cannot select or freeze a candidate.");
+        writer.WritePropertyName("workloads");
+        writer.WriteStartArray();
+        writer.WriteStringValue("equal-volume fresh-process retained memory by homogeneous, layered, mixed, and high-entropy distribution");
+        writer.WriteStringValue("addressed random and linear BlockStateId reads over mirrored dense/adaptive section layouts");
+        writer.WriteStringValue("addressed interior and boundary 4x4x4 edit clusters over mirrored dense/adaptive section layouts");
+        writer.WriteStringValue("immutable snapshot creation with semantic reconstruction outside the timed interval");
+        writer.WriteStringValue("canonical logical projection length/digest and dirty-section logical values republished");
+        writer.WriteStringValue("unique and gross remesh-halo input samples");
+        writer.WriteEndArray();
+        writer.WriteString("addressPreparation", "Global fixture positions are converted to SectionIndex and LocalIndex before measurement; dense and adaptive candidates consume the same addressed trace and section layout.");
+        writer.WritePropertyName("warmupRepetitions");
+        writer.WriteStartObject();
+        writer.WriteNumber("broadReadPath", 64);
+        writer.WriteNumber("perSampleReadTiming", 4);
+        writer.WriteNumber("perSampleReadAllocation", 4);
+        writer.WriteNumber("snapshot", 1);
+        writer.WriteNumber("logicalProjection", 1);
+        writer.WriteNumber("edit", 1);
+        writer.WriteNumber("retainedMemoryCorpus", 1);
+        writer.WriteEndObject();
+        writer.WritePropertyName("repetitions");
+        writer.WriteStartObject();
+        writer.WriteNumber("corpusCubes", run.CubeCount);
+        writer.WriteNumber("performanceCubes", run.CompletedPerformanceCubeCount);
+        writer.WriteNumber("pairedRounds", run.PairedRounds);
+        writer.WriteNumber("additionalThresholdCrossingRounds", run.Profile == E1Profile.Full ? 4 : 0);
+        writer.WriteNumber("freshProcessMemoryTrialsPerModeDistribution", run.FreshProcessMemoryTrialsPerMode);
+        writer.WriteNumber("editClustersPerTrace", run.EditClustersPerTrace);
+        writer.WriteNumber("bootstrapResamples", run.BootstrapResamples);
+        writer.WriteEndObject();
+        writer.WritePropertyName("thresholds");
+        writer.WriteStartObject();
+        writer.WriteNumber("adaptiveHomogeneousLayeredMixedRetainedMemoryUpper95", 0.50);
+        writer.WriteNumber("adaptiveHighEntropyRetainedMemoryUpper95", 1.10);
+        writer.WriteNumber("adaptiveAddressedTimingUpper95", 1.15);
+        writer.WriteNumber("warmedReadAllocatedBytes", 0);
+        writer.WriteNumber("side32RetainedMemoryUpper95", 0.80);
+        writer.WriteNumber("side32StrongPrimaryUpper95", 0.80);
+        writer.WriteNumber("side32MaximumPrimaryUpper95", 1.15);
+        writer.WriteNumber("side16PrimaryGeometricMean", 1.15);
+        writer.WriteNumber("side16MaximumPrimaryUpper95", 1.25);
+        writer.WriteNumber("logicalAndUniqueHaloAmplificationP95", 2.0);
+        writer.WriteEndObject();
+        writer.WritePropertyName("samplePolicy");
+        writer.WriteStartObject();
+        writer.WriteString("statisticalUnit", run.StatisticalUnit);
+        writer.WriteString("outliers", "No raw timing or amplification outlier is removed.");
+        writer.WriteString("invalidMemory", "Negative or failed fresh-process retained-memory trials remain in raw evidence, are excluded from ratios, and make the affected criterion inconclusive.");
+        writer.WriteString("nonpositiveTiming", "The raw sample remains recorded; no ratio is synthesized and the affected diagnostic is inconclusive.");
+        writer.WriteEndObject();
+        writer.WritePropertyName("runtime");
+        writer.WriteStartObject();
+        writer.WriteString("configuration", "Release");
+        writer.WriteString("jit", "DOTNET_TieredCompilation=0; DOTNET_TieredPGO=0; enforced by a fresh report child process");
+        writer.WriteString("timer", "Stopwatch.GetTimestamp");
+        writer.WriteString("allocation", "GC.GetAllocatedBytesForCurrentThread on a checksum-matched independent probe");
+        writer.WriteEndObject();
+        writer.WritePropertyName("requiredHostMetadata");
+        writer.WriteStartArray();
+        foreach (string field in new[]
+        {
+            "operating system",
+            "process architecture",
+            "CPU and logical processor count",
+            "process affinity",
+            "machine model",
+            "physical and managed memory",
+            "power mode",
+            "runtime and SDK",
+            "GC mode and latency",
+            "source and binary identities",
+        })
+        {
+            writer.WriteStringValue(field);
+        }
+
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+    }
+
     private static string ToMarkdown(E1ReportDocument document)
     {
         StringBuilder text = new();
-        _ = text.Append("# G1/E1 core-data observations").AppendLine().AppendLine();
-        _ = text.AppendLine("**Disposition: defer.** The predeclared G0 owner acceptance for host, runtime, GC, power, and product budgets is absent; this report cannot freeze compatibility constants.").AppendLine();
-        _ = text.Append("Fixture set: `").Append(G0FixtureId).Append("`, `").Append(SectionFixtureId).Append("`, `").Append(ProjectionFixtureId).Append("`; seed `0x").Append(Seed.ToString("X16", CultureInfo.InvariantCulture)).AppendLine("`.").AppendLine();
+        _ = text.Append("# G1/E1-r1 core-data diagnostics").AppendLine().AppendLine();
+        _ = text.AppendLine("**Disposition: defer; evidence classification: diagnostic.** The predeclared G0 owner acceptance for host, runtime, GC, power, and product budgets is absent; this report cannot select a candidate or freeze compatibility constants.").AppendLine();
+        _ = text.Append("Protocol `").Append(ProtocolId).Append("`; fixture set: `").Append(G0FixtureId).Append("`, `").Append(SectionFixtureId).Append("`, `").Append(ProjectionFixtureId).Append("`; seed `0x").Append(Seed.ToString("X16", CultureInfo.InvariantCulture)).AppendLine("`.").AppendLine();
         _ = text.AppendLine("## Protocol").AppendLine();
         _ = text.AppendLine("The corpus streams canonical 32-cubed semantic cubes. Ordinal modulo four selects homogeneous (alternating air/stone), layered, mixed, and high-entropy distributions. Every semantic fingerprint hashes the domain, fixture, seed, ordinal, distribution byte, and exactly 32,768 BlockStateId values in X-to-Z-to-Y order. One 32-cubed section and eight 16-cubed sections must match that semantic fingerprint; their logical-projection byte hashes are intentionally not required to match.").AppendLine();
         _ = text.Append("This profile fingerprints all ").Append(document.Run.CubeCount.ToString(CultureInfo.InvariantCulture))
@@ -626,9 +829,9 @@ internal static class E1CoreDataReport
             .Append(" deterministic round-robin cubes. It applies ").Append(document.Run.EditClustersPerMeasuredCube.ToString(CultureInfo.InvariantCulture))
             .Append(" 4x4x4 cluster per measured cube and trace (").Append(document.Run.EditClustersPerTrace.ToString(CultureInfo.InvariantCulture))
             .AppendLine(" clusters per trace in total), avoiding an unintended corpus-times-cluster cross-product.").AppendLine();
-        _ = text.AppendLine("Measurements are same-machine paired Stopwatch observations. Orders alternate; raw samples include order, duration, checksum, allocations, and operation counts. One same-cube, same-round candidate/baseline pair is the raw unit. Decision summaries first take one median per cube across that cube's rounds (and traces for a grouped category), then bootstrap those cube-level units so repeated measurements are not treated as independent. No raw outlier is removed. Retained memory, when available, uses fresh child processes per distribution and is explicitly distinct from known logical payload bytes.").AppendLine();
-        _ = text.AppendLine("## Provisional assessment").AppendLine();
-        _ = text.Append(document.Decision.ProvisionalAssessment).AppendLine().AppendLine();
+        _ = text.AppendLine("Read and edit routing is resolved into layout-specific SectionIndex/LocalIndex traces before any timed interval. Adaptive and dense candidates consume the same addressed trace and the same section layout, so the ratio isolates storage behavior rather than global-coordinate decomposition. Measurements are same-machine paired Stopwatch diagnostics. Orders alternate; raw samples include order, duration, checksum, allocations, and operation counts. One same-cube, same-round candidate/baseline pair is the raw unit. Summaries first take one median per cube across that cube's rounds (and traces for a grouped category), then bootstrap those cube-level units so repeated measurements are not treated as independent. No raw outlier is removed. Retained memory, when available, uses fresh child processes per distribution and is explicitly distinct from known logical payload bytes.").AppendLine();
+        _ = text.AppendLine("## Diagnostic assessment").AppendLine();
+        _ = text.Append(document.Decision.DiagnosticSummary).AppendLine().AppendLine();
         _ = text.Append("Reason for overall defer: ").Append(document.Decision.OverallRationale).AppendLine().AppendLine();
         _ = text.AppendLine("| Criterion | Status | Evidence |")
             .AppendLine("| --- | --- | --- |");
@@ -757,8 +960,8 @@ internal static class E1CoreDataReport
         {
             this.options = options;
             this.raw = raw;
-            AppendUtf8(one32Corpus, "VC-G1-E1-CORPUS-FP-0.1.0");
-            AppendUtf8(eight16Corpus, "VC-G1-E1-CORPUS-FP-0.1.0");
+            AppendUtf8(one32Corpus, CorpusFingerprintDomain);
+            AppendUtf8(eight16Corpus, CorpusFingerprintDomain);
         }
 
         internal void RecordPaletteBoundaries()
@@ -906,7 +1109,7 @@ internal static class E1CoreDataReport
                     Stopwatch.Frequency,
                     4,
                     "DOTNET_TieredCompilation=0; DOTNET_TieredPGO=0; enforced by a fresh report child process",
-                    "timing uses Stopwatch.GetTimestamp after four read warmups; allocation uses a checksum-matched independent read probe after four additional warmups",
+                    "layout-specific SectionIndex/LocalIndex traces and mirrored dense section arrays are prepared before measurement; timing uses Stopwatch.GetTimestamp after four read warmups; allocation uses a checksum-matched independent read probe after four additional warmups",
                     "raw unit: one same-cube, same-round ordered pair; decision unit: one cube median across all its rounds/traces in the grouped category; bootstrap resamples cube-level units",
                     true,
                     DateTimeOffset.UtcNow,
@@ -939,32 +1142,39 @@ internal static class E1CoreDataReport
             int roundCount)
         {
             _ = map;
+            BlockStateId[][] dense32 = SectionEqualVolumeFixture.CreateDenseSections(SectionEqualVolumeLayout.OneSide32, canonical);
+            BlockStateId[][] dense16 = SectionEqualVolumeFixture.CreateDenseSections(SectionEqualVolumeLayout.EightSide16, canonical);
+            SectionCellAddress[] random32 = SectionEqualVolumeFixture.CreateAddressTrace(SectionEqualVolumeLayout.OneSide32, randomTrace);
+            SectionCellAddress[] random16 = SectionEqualVolumeFixture.CreateAddressTrace(SectionEqualVolumeLayout.EightSide16, randomTrace);
+            int[] linearTrace = CreateLinearGlobalTrace();
+            SectionCellAddress[] linear32 = SectionEqualVolumeFixture.CreateAddressTrace(SectionEqualVolumeLayout.OneSide32, linearTrace);
+            SectionCellAddress[] linear16 = SectionEqualVolumeFixture.CreateAddressTrace(SectionEqualVolumeLayout.EightSide16, linearTrace);
             for (int round = roundStart; round < roundStart + roundCount; round++)
             {
                 Pair(
                     ordinal, distribution, round, "adaptive-vs-dense/random-read/one-side32", "one-side32", "dense", randomTrace.Length,
-                    () => MeasureRandomRead(one32, SectionEqualVolumeLayout.OneSide32, randomTrace),
-                    () => MeasureDenseRandomRead(canonical, randomTrace));
+                    () => MeasureRead(one32, random32, repeatCount: 1),
+                    () => MeasureDenseRead(dense32, random32, repeatCount: 1));
                 Pair(
                     ordinal, distribution, round, "adaptive-vs-dense/random-read/eight-side16", "eight-side16", "dense", randomTrace.Length,
-                    () => MeasureRandomRead(eight16, SectionEqualVolumeLayout.EightSide16, randomTrace),
-                    () => MeasureDenseRandomRead(canonical, randomTrace));
+                    () => MeasureRead(eight16, random16, repeatCount: 1),
+                    () => MeasureDenseRead(dense16, random16, repeatCount: 1));
                 Pair(
                     ordinal, distribution, round, "adaptive-vs-dense/linear-read/one-side32", "one-side32", "dense", SectionBenchmarkSupport.RandomTraceLength,
-                    () => MeasureLinearRead(one32, SectionEqualVolumeLayout.OneSide32),
-                    () => MeasureDenseLinearRead(canonical));
+                    () => MeasureRead(one32, linear32, repeatCount: 2),
+                    () => MeasureDenseRead(dense32, linear32, repeatCount: 2));
                 Pair(
                     ordinal, distribution, round, "adaptive-vs-dense/linear-read/eight-side16", "eight-side16", "dense", SectionBenchmarkSupport.RandomTraceLength,
-                    () => MeasureLinearRead(eight16, SectionEqualVolumeLayout.EightSide16),
-                    () => MeasureDenseLinearRead(canonical));
+                    () => MeasureRead(eight16, linear16, repeatCount: 2),
+                    () => MeasureDenseRead(dense16, linear16, repeatCount: 2));
                 Pair(
                     ordinal, distribution, round, "section-side/random-read", "one-side32", "eight-side16", randomTrace.Length,
-                    () => MeasureRandomRead(one32, SectionEqualVolumeLayout.OneSide32, randomTrace),
-                    () => MeasureRandomRead(eight16, SectionEqualVolumeLayout.EightSide16, randomTrace));
+                    () => MeasureRead(one32, random32, repeatCount: 1),
+                    () => MeasureRead(eight16, random16, repeatCount: 1));
                 Pair(
                     ordinal, distribution, round, "section-side/linear-read", "one-side32", "eight-side16", SectionBenchmarkSupport.RandomTraceLength,
-                    () => MeasureLinearRead(one32, SectionEqualVolumeLayout.OneSide32),
-                    () => MeasureLinearRead(eight16, SectionEqualVolumeLayout.EightSide16));
+                    () => MeasureRead(one32, linear32, repeatCount: 2),
+                    () => MeasureRead(eight16, linear16, repeatCount: 2));
             }
         }
 
@@ -1002,20 +1212,22 @@ internal static class E1CoreDataReport
             int roundCount)
         {
             string traceName = traceKind == SectionEditTraceKind.InteriorClusters ? "interior" : "boundary";
+            SectionAddressedEdit[] addressed32 = SectionEqualVolumeFixture.CreateAddressedEditTrace(SectionEqualVolumeLayout.OneSide32, trace);
+            SectionAddressedEdit[] addressed16 = SectionEqualVolumeFixture.CreateAddressedEditTrace(SectionEqualVolumeLayout.EightSide16, trace);
             for (int round = roundStart; round < roundStart + roundCount; round++)
             {
                 Pair(
                     ordinal, distribution, round, $"adaptive-vs-dense/clustered-edit/{traceName}/one-side32", "one-side32", "dense", trace.Length,
-                    () => MeasureEdits(canonical, SectionEqualVolumeLayout.OneSide32, trace),
-                    () => MeasureDenseEdits(canonical, trace));
+                    () => MeasureEdits(canonical, SectionEqualVolumeLayout.OneSide32, trace, addressed32),
+                    () => MeasureDenseEdits(canonical, SectionEqualVolumeLayout.OneSide32, trace, addressed32));
                 Pair(
                     ordinal, distribution, round, $"adaptive-vs-dense/clustered-edit/{traceName}/eight-side16", "eight-side16", "dense", trace.Length,
-                    () => MeasureEdits(canonical, SectionEqualVolumeLayout.EightSide16, trace),
-                    () => MeasureDenseEdits(canonical, trace));
+                    () => MeasureEdits(canonical, SectionEqualVolumeLayout.EightSide16, trace, addressed16),
+                    () => MeasureDenseEdits(canonical, SectionEqualVolumeLayout.EightSide16, trace, addressed16));
                 Pair(
                     ordinal, distribution, round, $"section-side/clustered-edit/{traceName}", "one-side32", "eight-side16", trace.Length,
-                    () => MeasureEdits(canonical, SectionEqualVolumeLayout.OneSide32, trace),
-                    () => MeasureEdits(canonical, SectionEqualVolumeLayout.EightSide16, trace));
+                    () => MeasureEdits(canonical, SectionEqualVolumeLayout.OneSide32, trace, addressed32),
+                    () => MeasureEdits(canonical, SectionEqualVolumeLayout.EightSide16, trace, addressed16));
             }
         }
 
@@ -1465,57 +1677,34 @@ internal static class E1CoreDataReport
         }
     }
 
-    private static E1MeasuredOperation MeasureRandomRead(
-        IReadOnlySectionBlockStates[] sections,
-        SectionEqualVolumeLayout layout,
-        int[] trace)
+    private static E1MeasuredOperation MeasureRead(
+        MutableSectionBlockStates[] sections,
+        SectionCellAddress[] trace,
+        int repeatCount)
     {
-        WarmRead(() => ReadRandom(sections, layout, trace));
+        WarmRead(() => ReadAdaptive(sections, trace, repeatCount));
         long beforeTicks = Stopwatch.GetTimestamp();
-        ulong timingChecksum = ReadRandom(sections, layout, trace);
+        ulong timingChecksum = ReadAdaptive(sections, trace, repeatCount);
         long duration = Stopwatch.GetTimestamp() - beforeTicks;
-        WarmRead(() => ReadRandom(sections, layout, trace));
+        WarmRead(() => ReadAdaptive(sections, trace, repeatCount));
         long beforeAllocation = GC.GetAllocatedBytesForCurrentThread();
-        ulong allocationChecksum = ReadRandom(sections, layout, trace);
+        ulong allocationChecksum = ReadAdaptive(sections, trace, repeatCount);
         long allocated = GC.GetAllocatedBytesForCurrentThread() - beforeAllocation;
         return CreateReadMeasurement(duration, allocated, timingChecksum, allocationChecksum);
     }
 
-    private static E1MeasuredOperation MeasureDenseRandomRead(BlockStateId[] states, int[] trace)
+    private static E1MeasuredOperation MeasureDenseRead(
+        BlockStateId[][] sections,
+        SectionCellAddress[] trace,
+        int repeatCount)
     {
-        WarmRead(() => ReadDenseRandom(states, trace));
+        WarmRead(() => ReadDense(sections, trace, repeatCount));
         long beforeTicks = Stopwatch.GetTimestamp();
-        ulong timingChecksum = ReadDenseRandom(states, trace);
+        ulong timingChecksum = ReadDense(sections, trace, repeatCount);
         long duration = Stopwatch.GetTimestamp() - beforeTicks;
-        WarmRead(() => ReadDenseRandom(states, trace));
+        WarmRead(() => ReadDense(sections, trace, repeatCount));
         long beforeAllocation = GC.GetAllocatedBytesForCurrentThread();
-        ulong allocationChecksum = ReadDenseRandom(states, trace);
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - beforeAllocation;
-        return CreateReadMeasurement(duration, allocated, timingChecksum, allocationChecksum);
-    }
-
-    private static E1MeasuredOperation MeasureLinearRead(IReadOnlySectionBlockStates[] sections, SectionEqualVolumeLayout layout)
-    {
-        WarmRead(() => ReadLinear(sections, layout));
-        long beforeTicks = Stopwatch.GetTimestamp();
-        ulong timingChecksum = ReadLinear(sections, layout);
-        long duration = Stopwatch.GetTimestamp() - beforeTicks;
-        WarmRead(() => ReadLinear(sections, layout));
-        long beforeAllocation = GC.GetAllocatedBytesForCurrentThread();
-        ulong allocationChecksum = ReadLinear(sections, layout);
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - beforeAllocation;
-        return CreateReadMeasurement(duration, allocated, timingChecksum, allocationChecksum);
-    }
-
-    private static E1MeasuredOperation MeasureDenseLinearRead(BlockStateId[] states)
-    {
-        WarmRead(() => ReadDenseLinear(states));
-        long beforeTicks = Stopwatch.GetTimestamp();
-        ulong timingChecksum = ReadDenseLinear(states);
-        long duration = Stopwatch.GetTimestamp() - beforeTicks;
-        WarmRead(() => ReadDenseLinear(states));
-        long beforeAllocation = GC.GetAllocatedBytesForCurrentThread();
-        ulong allocationChecksum = ReadDenseLinear(states);
+        ulong allocationChecksum = ReadDense(sections, trace, repeatCount);
         long allocated = GC.GetAllocatedBytesForCurrentThread() - beforeAllocation;
         return CreateReadMeasurement(duration, allocated, timingChecksum, allocationChecksum);
     }
@@ -1558,23 +1747,30 @@ internal static class E1CoreDataReport
     private static E1MeasuredOperation MeasureEdits(
         BlockStateId[] canonical,
         SectionEqualVolumeLayout layout,
-        SectionEdit[] trace)
+        SectionEdit[] trace,
+        SectionAddressedEdit[] addressedTrace)
     {
         MutableSectionBlockStates[] warm = SectionEqualVolumeFixture.CreateSections(layout, canonical);
-        _ = ApplyEdits(warm, layout, trace);
+        _ = ApplyEdits(warm, addressedTrace);
         MutableSectionBlockStates[] candidate = SectionEqualVolumeFixture.CreateSections(layout, canonical);
-        E1MeasuredOperation measurement = Measure(() => ApplyEdits(candidate, layout, trace));
+        E1MeasuredOperation measurement = Measure(() => ApplyEdits(candidate, addressedTrace));
         BlockStateId[] actual = CopyCanonicalFromSnapshots(candidate, layout);
         return VerifyAndIncludeEditedSemantics(measurement, canonical, trace, actual);
     }
 
-    private static E1MeasuredOperation MeasureDenseEdits(BlockStateId[] canonical, SectionEdit[] trace)
+    private static E1MeasuredOperation MeasureDenseEdits(
+        BlockStateId[] canonical,
+        SectionEqualVolumeLayout layout,
+        SectionEdit[] trace,
+        SectionAddressedEdit[] addressedTrace)
     {
-        BlockStateId[] warm = (BlockStateId[])canonical.Clone();
-        _ = ApplyDenseEdits(warm, trace);
-        BlockStateId[] candidate = (BlockStateId[])canonical.Clone();
-        E1MeasuredOperation measurement = Measure(() => ApplyDenseEdits(candidate, trace));
-        return VerifyAndIncludeEditedSemantics(measurement, canonical, trace, candidate);
+        BlockStateId[][] warm = SectionEqualVolumeFixture.CreateDenseSections(layout, canonical);
+        _ = ApplyDenseEdits(warm, addressedTrace);
+        BlockStateId[][] candidate = SectionEqualVolumeFixture.CreateDenseSections(layout, canonical);
+        E1MeasuredOperation measurement = Measure(() => ApplyDenseEdits(candidate, addressedTrace));
+        BlockStateId[] actual = new BlockStateId[CubeVolume];
+        SectionEqualVolumeFixture.CopyDenseToCanonical(candidate, layout, actual);
+        return VerifyAndIncludeEditedSemantics(measurement, canonical, trace, actual);
     }
 
     private static E1MeasuredOperation VerifyAndIncludeEditedSemantics(
@@ -1614,50 +1810,45 @@ internal static class E1CoreDataReport
         return new E1MeasuredOperation(duration, allocated, result.Checksum, result.ByteLength, result.Digest);
     }
 
-    private static ulong ReadRandom(IReadOnlySectionBlockStates[] sections, SectionEqualVolumeLayout layout, int[] trace)
+    private static int[] CreateLinearGlobalTrace()
     {
-        ulong checksum = 0;
-        foreach (int index in trace)
+        int[] trace = new int[CubeVolume];
+        for (int index = 0; index < trace.Length; index++)
         {
-            checksum = unchecked((checksum * 0x100000001B3UL) ^ SectionEqualVolumeFixture.GetGlobalUnchecked(sections, layout, index).Value);
+            trace[index] = index;
         }
 
-        return checksum;
+        return trace;
     }
 
-    private static ulong ReadDenseRandom(BlockStateId[] states, int[] trace)
+    private static ulong ReadAdaptive(
+        MutableSectionBlockStates[] sections,
+        SectionCellAddress[] trace,
+        int repeatCount)
     {
         ulong checksum = 0;
-        foreach (int index in trace)
+        for (int repeat = 0; repeat < repeatCount; repeat++)
         {
-            checksum = unchecked((checksum * 0x100000001B3UL) ^ states[index].Value);
-        }
-
-        return checksum;
-    }
-
-    private static ulong ReadLinear(IReadOnlySectionBlockStates[] sections, SectionEqualVolumeLayout layout)
-    {
-        ulong checksum = 0;
-        for (int pass = 0; pass < 2; pass++)
-        {
-            for (int index = 0; index < CubeVolume; index++)
+            foreach (SectionCellAddress address in trace)
             {
-                checksum = unchecked((checksum * 0x100000001B3UL) ^ SectionEqualVolumeFixture.GetGlobalUnchecked(sections, layout, index).Value);
+                checksum = unchecked((checksum * 0x100000001B3UL) ^ SectionEqualVolumeFixture.GetAddressedUnchecked(sections, address).Value);
             }
         }
 
         return checksum;
     }
 
-    private static ulong ReadDenseLinear(ReadOnlySpan<BlockStateId> states)
+    private static ulong ReadDense(
+        BlockStateId[][] sections,
+        SectionCellAddress[] trace,
+        int repeatCount)
     {
         ulong checksum = 0;
-        for (int pass = 0; pass < 2; pass++)
+        for (int repeat = 0; repeat < repeatCount; repeat++)
         {
-            foreach (BlockStateId state in states)
+            foreach (SectionCellAddress address in trace)
             {
-                checksum = unchecked((checksum * 0x100000001B3UL) ^ state.Value);
+                checksum = unchecked((checksum * 0x100000001B3UL) ^ SectionEqualVolumeFixture.GetDenseAddressedUnchecked(sections, address).Value);
             }
         }
 
@@ -1681,15 +1872,27 @@ internal static class E1CoreDataReport
         return checksum;
     }
 
-    private static ulong ApplyEdits(MutableSectionBlockStates[] sections, SectionEqualVolumeLayout layout, SectionEdit[] trace)
+    private static ulong ApplyEdits(MutableSectionBlockStates[] sections, SectionAddressedEdit[] trace)
     {
         ulong checksum = 0xCBF29CE484222325UL;
-        foreach (SectionEdit edit in trace)
+        foreach (SectionAddressedEdit edit in trace)
         {
             checksum = SectionBenchmarkSupport.AddEditChecksum(
                 checksum,
-                edit,
-                SectionEqualVolumeFixture.SetGlobalUnchecked(sections, layout, edit));
+                edit.Edit,
+                SectionEqualVolumeFixture.SetAddressedUnchecked(sections, edit));
+        }
+
+        return checksum;
+    }
+
+    private static ulong ApplyDenseEdits(BlockStateId[][] states, SectionAddressedEdit[] trace)
+    {
+        ulong checksum = 0xCBF29CE484222325UL;
+        foreach (SectionAddressedEdit edit in trace)
+        {
+            SectionWriteResult result = SectionEqualVolumeFixture.SetDenseAddressedUnchecked(states, edit);
+            checksum = SectionBenchmarkSupport.AddEditChecksum(checksum, edit.Edit, result);
         }
 
         return checksum;
@@ -1967,8 +2170,10 @@ internal static class E1CoreDataReport
             }
 
             _ = Directory.CreateDirectory(outputDirectory);
-            rawPath = Path.Combine(outputDirectory, "e1-core-data-raw.ndjson");
-            rawWriter = new StreamWriter(File.Create(rawPath), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            rawPath = Path.Combine(outputDirectory, RawArtifactName);
+            rawWriter = new StreamWriter(
+                new FileStream(rawPath, FileMode.CreateNew, FileAccess.Write, FileShare.None),
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         }
 
         internal void Record(E1RawObservation observation)
@@ -2115,7 +2320,7 @@ internal static class E1CoreDataReport
             }
 
             string? output = values.TryGetValue("--output", out string? outputValue)
-                ? Path.GetFullPath(outputValue)
+                ? Path.TrimEndingDirectorySeparator(Path.GetFullPath(outputValue))
                 : null;
             if (profile == E1Profile.Full && output is null)
             {
@@ -2504,7 +2709,7 @@ internal static class E1CoreDataReport
 
     private sealed record E1DecisionAssessment(
         bool PerformanceDecisionEligible,
-        string ProvisionalAssessment,
+        string DiagnosticSummary,
         E1CriterionAssessment[] Criteria,
         string OverallRationale,
         string ThresholdProtocol)
@@ -2546,38 +2751,28 @@ internal static class E1CoreDataReport
 
             AddAdaptiveMemoryCriterion(criteria, profile, metrics, memory, "one-side32");
             AddAdaptiveMemoryCriterion(criteria, profile, metrics, memory, "eight-side16");
-            AddAdaptiveTimingCriterion(criteria, profile, metrics, "one-side32");
-            AddAdaptiveTimingCriterion(criteria, profile, metrics, "eight-side16");
-            AddSectionSideCriteria(criteria, profile, metrics, amplification, preferSide32: true);
-            AddSectionSideCriteria(criteria, profile, metrics, amplification, preferSide32: false);
+            AddAdaptiveTimingCriterion(criteria, profile, metrics, positiveDurations, "one-side32");
+            AddAdaptiveTimingCriterion(criteria, profile, metrics, positiveDurations, "eight-side16");
+            AddSectionSideCriteria(criteria, profile, metrics, amplification, memory, positiveDurations, preferSide32: true);
+            AddSectionSideCriteria(criteria, profile, metrics, amplification, memory, positiveDurations, preferSide32: false);
             criteria.Add(new E1CriterionAssessment(
-                "save-and-network-amplification",
-                E1CriterionStatus.Inconclusive,
-                "No G1 save format or network encoding exists to measure. Canonical logical-projection bytes are retained as a representation-neutral republish proxy and are not relabeled as storage or wire evidence."));
+                "storage-neutral-logical-diagnostics",
+                E1CriterionStatus.Pass,
+                "Canonical logical values republished, projection byte length/digest, dirty-section count, and unique/gross remesh-halo samples were recorded. None is labeled as persistence or wire throughput."));
             criteria.Add(new E1CriterionAssessment(
                 "g0-owner-acceptance",
                 E1CriterionStatus.Blocked,
                 "No owner acceptance exists for this host, runtime, GC mode, power mode, or the applicable G0 product budgets."));
 
-            bool provisionalSide32 = isFull && Passes(criteria, "save-and-network-amplification") && Passes(criteria, "positive-measured-durations") && Passes(criteria, "adaptive-memory-one-side32") &&
-                Passes(criteria, "adaptive-timing-one-side32") && Passes(criteria, "side32-memory") &&
-                Passes(criteria, "side32-primary") && Passes(criteria, "side32-amplification");
-            bool provisionalSide16 = isFull && Passes(criteria, "save-and-network-amplification") && Passes(criteria, "positive-measured-durations") && Passes(criteria, "adaptive-memory-eight-side16") &&
-                Passes(criteria, "adaptive-timing-eight-side16") && Passes(criteria, "side16-primary") &&
-                Passes(criteria, "side16-amplification");
-            string provisional = profile == E1Profile.Ci
-                ? "CI smoke completed. Its timings and one-trial memory deltas are diagnostic only; no candidate is provisionally selected."
-                : provisionalSide32
-                    ? "The measured criteria provisionally favor one side32 adaptive section for the equal-volume fixture. This is observational and cannot freeze a constant."
-                    : provisionalSide16
-                        ? "The measured criteria provisionally retain eight side16 adaptive sections for the equal-volume fixture. This is observational and cannot freeze a constant."
-                        : "Neither candidate satisfies every predeclared metric prerequisite in this observation. Thresholds remain unchanged and no candidate is selected.";
+            string diagnosticSummary = profile == E1Profile.Ci
+                ? "CI smoke completed. Its timings and one-trial memory deltas are diagnostic only; no candidate is selected."
+                : "The full diagnostic profile records each predeclared threshold result without selecting a candidate. Thresholds remain unchanged; only issue #31 may run the owner-accepted decision profile.";
             return new E1DecisionAssessment(
                 false,
-                provisional,
+                diagnosticSummary,
                 [.. criteria],
-                "G0 owner acceptance of the benchmark host, runtime, GC, power conditions, and applicable product budgets is explicitly absent. The issue protocol therefore requires defer even if any provisional metric rule appears to pass.",
-                "Adaptive rule: equal-weight homogeneous/layered/mixed retained block-state memory <= 50% of dense; HighEntropy <= 110%; upper 95% adaptive/dense time ratio <= 1.15 for random reads, linear reads, and clustered edits; warmed reads exactly 0 B/op; snapshot/projection semantics pass. Section-side rule: side32 overturns the side16 prior only with retained-memory upper ratio <= 0.80, at least three read/linear/edit/snapshot/projection upper ratios <= 0.80, no primary upper > 1.15, and p95 canonical-logical-byte/unique-halo amplification <= 2x side16. Otherwise side16 may be selected only with equal-weight geometric mean <= 1.15x side32, no primary > 1.25x, and p95 amplification <= 2x side32. Threshold-crossing intervals add four paired rounds; still ambiguous is defer. G0 absence always makes the overall result defer.");
+                "G0 owner acceptance of the benchmark host, runtime, GC, power conditions, and applicable product budgets is explicitly absent. The issue protocol therefore requires defer even if a diagnostic metric rule appears to pass.",
+                "Predeclared diagnostic thresholds retained for the later accepted decision run: equal-weight homogeneous/layered/mixed retained block-state memory <= 50% of addressed dense; HighEntropy <= 110%; upper 95% adaptive/dense addressed time ratio <= 1.15 for random reads, linear reads, and clustered edits; warmed reads exactly 0 B/op; snapshot/projection semantics pass. Section-side rule: side32 overturns the side16 prior only with retained-memory upper ratio <= 0.80, at least three of five retained-memory/grouped-read/grouped-edit/snapshot/projection upper ratios <= 0.80, no primary upper > 1.15, and p95 canonical-logical-byte/unique-halo amplification <= 2x side16. Otherwise side16 may be selected only with equal-weight geometric mean <= 1.15x side32, no primary > 1.25x, and p95 amplification <= 2x side32. Threshold-crossing intervals add four paired rounds; no raw outliers are removed; still ambiguous is defer. G0 absence makes this E1-r1 run diagnostic and non-decision-eligible.");
         }
 
         private static void AddAdaptiveMemoryCriterion(
@@ -2597,6 +2792,7 @@ internal static class E1CoreDataReport
             List<string> observations = [];
             bool available = memory.IsAvailable;
             bool passes = true;
+            bool ambiguous = false;
             foreach ((string distribution, double threshold) in new[]
             {
                 ("homogeneous-layered-mixed", 0.50),
@@ -2605,20 +2801,21 @@ internal static class E1CoreDataReport
             {
                 string metricName = $"fresh-process-memory/{distribution}/{candidate}-vs-dense";
                 E1MetricSummary? summary = metrics.SingleOrDefault(metric => string.Equals(metric.Name, metricName, StringComparison.Ordinal));
-                if (summary?.BootstrapUpper95 is not double upper)
+                if (summary?.BootstrapLower95 is not double lower || summary.BootstrapUpper95 is not double upper)
                 {
                     available = false;
                     observations.Add($"{distribution}=inconclusive");
                     continue;
                 }
 
+                ambiguous |= lower <= threshold && upper >= threshold;
                 passes &= upper <= threshold;
                 observations.Add($"{distribution} upper95={upper.ToString("F6", CultureInfo.InvariantCulture)} (limit {threshold.ToString("F2", CultureInfo.InvariantCulture)})");
             }
 
             criteria.Add(new E1CriterionAssessment(
                 name,
-                !available ? E1CriterionStatus.Inconclusive : passes ? E1CriterionStatus.Pass : E1CriterionStatus.Fail,
+                !available || ambiguous ? E1CriterionStatus.Inconclusive : passes ? E1CriterionStatus.Pass : E1CriterionStatus.Fail,
                 string.Join("; ", observations)));
         }
 
@@ -2626,12 +2823,22 @@ internal static class E1CoreDataReport
             List<E1CriterionAssessment> criteria,
             E1Profile profile,
             E1MetricSummary[] metrics,
+            bool timingEvidenceIsValid,
             string candidate)
         {
             string name = $"adaptive-timing-{candidate}";
             if (profile != E1Profile.Full)
             {
                 criteria.Add(new E1CriterionAssessment(name, E1CriterionStatus.Inconclusive, "The CI timing profile is not decision-eligible."));
+                return;
+            }
+
+            if (!timingEvidenceIsValid)
+            {
+                criteria.Add(new E1CriterionAssessment(
+                    name,
+                    E1CriterionStatus.Inconclusive,
+                    "At least one paired duration was nonpositive. The affected timing ratios were omitted, so the grouped timing criterion is inconclusive."));
                 return;
             }
 
@@ -2642,9 +2849,11 @@ internal static class E1CoreDataReport
             ];
             bool available = selected.Length == 4 && selected.All(metric => metric.BootstrapUpper95.HasValue);
             double maximumUpper = available ? selected.Max(metric => metric.BootstrapUpper95!.Value) : double.NaN;
+            bool ambiguous = available && selected.Any(metric =>
+                metric.BootstrapLower95 <= 1.15 && metric.BootstrapUpper95 >= 1.15);
             criteria.Add(new E1CriterionAssessment(
                 name,
-                !available ? E1CriterionStatus.Inconclusive : maximumUpper <= 1.15 ? E1CriterionStatus.Pass : E1CriterionStatus.Fail,
+                !available || ambiguous ? E1CriterionStatus.Inconclusive : maximumUpper <= 1.15 ? E1CriterionStatus.Pass : E1CriterionStatus.Fail,
                 available
                     ? $"Maximum upper95 adaptive/dense ratio across random read, linear read, interior edits, and boundary edits is {maximumUpper.ToString("F6", CultureInfo.InvariantCulture)} (limit 1.15)."
                     : $"Expected four adaptive/dense timing summaries for {candidate}; found {selected.Length}."));
@@ -2655,6 +2864,8 @@ internal static class E1CoreDataReport
             E1Profile profile,
             E1MetricSummary[] metrics,
             E1AmplificationSummary[] amplification,
+            E1MemoryReport memoryReport,
+            bool timingEvidenceIsValid,
             bool preferSide32)
         {
             string side = preferSide32 ? "side32" : "side16";
@@ -2673,12 +2884,20 @@ internal static class E1CoreDataReport
             if (preferSide32)
             {
                 E1MetricSummary? memory = metrics.SingleOrDefault(metric => string.Equals(metric.Name, "fresh-process-memory/balanced/section-side", StringComparison.Ordinal));
+                bool memoryAmbiguous = memory?.BootstrapLower95 is double memoryLower
+                    && memory.BootstrapUpper95 is double memoryUpperBound
+                    && memoryLower <= 0.80
+                    && memoryUpperBound >= 0.80;
                 criteria.Add(new E1CriterionAssessment(
                     "side32-memory",
-                    memory?.BootstrapUpper95 is not double memoryUpper
+                    !memoryReport.IsAvailable || memory?.BootstrapUpper95 is not double memoryUpper
                         ? E1CriterionStatus.Inconclusive
+                        : memoryAmbiguous
+                            ? E1CriterionStatus.Inconclusive
                         : memoryUpper <= 0.80 ? E1CriterionStatus.Pass : E1CriterionStatus.Fail,
-                    memory?.BootstrapUpper95 is double observedMemoryUpper
+                    !memoryReport.IsAvailable
+                        ? "At least one retained-memory trial failed or was invalid, so the section-side memory criterion is inconclusive."
+                        : memory?.BootstrapUpper95 is double observedMemoryUpper
                         ? $"Balanced upper95 side32/side16 retained-memory ratio is {observedMemoryUpper.ToString("F6", CultureInfo.InvariantCulture)} (limit 0.80)."
                         : "The balanced side32/side16 retained-memory interval is unavailable."));
             }
@@ -2693,17 +2912,32 @@ internal static class E1CoreDataReport
                 metrics.SingleOrDefault(metric => string.Equals(metric.Name, memoryName, StringComparison.Ordinal)),
                 .. timingNames.Select(primaryName => metrics.SingleOrDefault(metric => string.Equals(metric.Name, prefix + primaryName, StringComparison.Ordinal))),
             ];
-            bool primaryAvailable = primary.All(metric => metric?.BootstrapUpper95.HasValue == true && metric.MedianRatio.HasValue);
+            bool primaryAvailable = memoryReport.IsAvailable
+                && timingEvidenceIsValid
+                && primary.All(metric => metric?.BootstrapUpper95.HasValue == true && metric.MedianRatio.HasValue);
             if (preferSide32)
             {
                 int strongWins = primaryAvailable ? primary.Count(metric => metric!.BootstrapUpper95!.Value <= 0.80) : 0;
+                int possibleStrongWins = primaryAvailable ? primary.Count(metric => metric!.BootstrapLower95!.Value <= 0.80) : 0;
                 double maximumUpper = primaryAvailable ? primary.Max(metric => metric!.BootstrapUpper95!.Value) : double.NaN;
+                bool definitelyPasses = strongWins >= 3 && maximumUpper <= 1.15;
+                bool possiblyPasses = possibleStrongWins >= 3 && primary.All(metric => metric!.BootstrapLower95!.Value <= 1.15);
                 criteria.Add(new E1CriterionAssessment(
                     "side32-primary",
-                    !primaryAvailable ? E1CriterionStatus.Inconclusive : strongWins >= 3 && maximumUpper <= 1.15 ? E1CriterionStatus.Pass : E1CriterionStatus.Fail,
+                    !primaryAvailable
+                        ? E1CriterionStatus.Inconclusive
+                        : definitelyPasses
+                            ? E1CriterionStatus.Pass
+                            : possiblyPasses
+                                ? E1CriterionStatus.Inconclusive
+                                : E1CriterionStatus.Fail,
                     primaryAvailable
-                        ? $"{strongWins} of five retained-memory/read/edit/snapshot/projection upper95 side32/side16 ratios are <= 0.80; maximum upper95 is {maximumUpper.ToString("F6", CultureInfo.InvariantCulture)} (limit 1.15)."
-                        : "One or more of the five grouped side32/side16 primary intervals is unavailable."));
+                        ? $"{strongWins} of five retained-memory/grouped-read/grouped-edit/snapshot/projection upper95 side32/side16 ratios are <= 0.80; maximum upper95 is {maximumUpper.ToString("F6", CultureInfo.InvariantCulture)} (limit 1.15)."
+                        : !memoryReport.IsAvailable
+                            ? "At least one retained-memory trial failed or was invalid, so the grouped side32/side16 primary criterion is inconclusive."
+                            : !timingEvidenceIsValid
+                                ? "At least one paired duration was nonpositive, so the grouped side32/side16 primary criterion is inconclusive."
+                                : "One or more of the five grouped side32/side16 primary intervals is unavailable."));
             }
             else
             {
@@ -2711,12 +2945,24 @@ internal static class E1CoreDataReport
                     ? Math.Exp(primary.Average(metric => Math.Log(metric!.MedianRatio!.Value)))
                     : double.NaN;
                 double maximumUpper = primaryAvailable ? primary.Max(metric => metric!.BootstrapUpper95!.Value) : double.NaN;
+                bool definitelyPasses = primaryAvailable && geometricMean <= 1.15 && maximumUpper <= 1.25;
+                bool possiblyPasses = primaryAvailable && geometricMean <= 1.15 && primary.All(metric => metric!.BootstrapLower95!.Value <= 1.25);
                 criteria.Add(new E1CriterionAssessment(
                     "side16-primary",
-                    !primaryAvailable ? E1CriterionStatus.Inconclusive : geometricMean <= 1.15 && maximumUpper <= 1.25 ? E1CriterionStatus.Pass : E1CriterionStatus.Fail,
+                    !primaryAvailable
+                        ? E1CriterionStatus.Inconclusive
+                        : definitelyPasses
+                            ? E1CriterionStatus.Pass
+                            : possiblyPasses
+                                ? E1CriterionStatus.Inconclusive
+                                : E1CriterionStatus.Fail,
                     primaryAvailable
                         ? $"Equal-weight geometric mean of five median side16/side32 ratios is {geometricMean.ToString("F6", CultureInfo.InvariantCulture)} (limit 1.15); maximum upper95 is {maximumUpper.ToString("F6", CultureInfo.InvariantCulture)} (limit 1.25)."
-                        : "One or more of the five grouped side16/side32 primary intervals is unavailable."));
+                        : !memoryReport.IsAvailable
+                            ? "At least one retained-memory trial failed or was invalid, so the grouped side16/side32 primary criterion is inconclusive."
+                            : !timingEvidenceIsValid
+                                ? "At least one paired duration was nonpositive, so the grouped side16/side32 primary criterion is inconclusive."
+                                : "One or more of the five grouped side16/side32 primary intervals is unavailable."));
             }
 
             (bool amplificationAvailable, double maximumAmplification) = MaximumAmplificationRatio(amplification, preferSide32);
@@ -2751,10 +2997,6 @@ internal static class E1CoreDataReport
             return (true, ratios.Max());
         }
 
-        private static bool Passes(List<E1CriterionAssessment> criteria, string name)
-        {
-            return criteria.Single(criterion => string.Equals(criterion.Name, name, StringComparison.Ordinal)).Status == E1CriterionStatus.Pass;
-        }
     }
 
     private sealed record E1ReportDocument(

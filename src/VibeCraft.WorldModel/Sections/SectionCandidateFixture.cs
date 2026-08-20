@@ -19,7 +19,7 @@ internal enum SectionFixtureKind : byte
 /// </summary>
 internal static class SectionCandidateFixture
 {
-    internal const string FixtureId = "VC-G1-E1-SECTIONS-0.1.0";
+    internal const string FixtureId = "VC-G1-E1-SECTIONS-1.0.0";
     internal const ulong DefaultSeed = 0x5643424654314531UL;
 
     internal static BlockStateId[] CreateStates(

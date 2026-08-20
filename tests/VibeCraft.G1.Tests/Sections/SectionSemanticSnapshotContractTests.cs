@@ -161,6 +161,33 @@ public sealed class SectionSemanticSnapshotContractTests
         }
     }
 
+    [Fact]
+    public void PublicSemanticReadsAllocateNothingWhenWarmed()
+    {
+        foreach (SectionGeometry geometry in new[] { SectionGeometry.Side16, SectionGeometry.Side32 })
+        {
+            foreach ((SectionFixtureKind fixture, _) in StorageFixtures)
+            {
+                ISectionBlockStateSnapshot snapshot = AsContract(
+                    SectionBlockStateSnapshot.Create(
+                        geometry,
+                        SectionRevision.Initial,
+                        SectionCandidateFixture.CreateStates(geometry, fixture)));
+                ulong checksum = ReadChecksum(snapshot, 0xA0761D6478BD642FUL);
+                long allocated = long.MaxValue;
+                for (int probe = 0; probe < 8 && allocated != 0; probe++)
+                {
+                    long before = GC.GetAllocatedBytesForCurrentThread();
+                    checksum ^= ReadChecksum(snapshot, 0xA0761D6478BD642FUL);
+                    allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+                }
+
+                GC.KeepAlive(checksum);
+                Assert.Equal(0, allocated);
+            }
+        }
+    }
+
     private static void VerifySemanticReads(
         SectionGeometry geometry,
         SectionFixtureKind fixture,

@@ -136,6 +136,106 @@ public sealed class SectionBlockStatesTests
     }
 
     [Fact]
+    public void PaletteGrowthReusesMutableStructuresUntilBitWidthChanges()
+    {
+        SectionGeometry geometry = SectionGeometry.Side16;
+        MutableSectionBlockStates section = new(geometry, default, default);
+        _ = section.TrySet(new LocalIndex(1), new BlockStateId(1));
+        _ = section.TrySet(new LocalIndex(2), new BlockStateId(2));
+
+        object storage = GetStorage(section);
+        object palette = GetPrivateField(storage, "_palette");
+        object indices = GetPrivateField(storage, "_indices");
+        object reverseLookup = GetPrivateField(storage, "_reverseLookup");
+
+        Assert.Equal(SectionWriteResult.Changed, section.TrySet(new LocalIndex(3), new BlockStateId(3)));
+        Assert.Same(storage, GetStorage(section));
+        Assert.Same(palette, GetPrivateField(storage, "_palette"));
+        Assert.Same(indices, GetPrivateField(storage, "_indices"));
+        Assert.Same(reverseLookup, GetPrivateField(storage, "_reverseLookup"));
+
+        Assert.Equal(SectionWriteResult.Changed, section.TrySet(new LocalIndex(4), new BlockStateId(4)));
+        Assert.Same(storage, GetStorage(section));
+        Assert.NotSame(palette, GetPrivateField(storage, "_palette"));
+        Assert.NotSame(indices, GetPrivateField(storage, "_indices"));
+        Assert.NotSame(reverseLookup, GetPrivateField(storage, "_reverseLookup"));
+        Assert.Equal(3, section.GetStorageMetrics().BitsPerEntry);
+    }
+
+    [Fact]
+    public void WarmedExistingPaletteEditsAllocateNothing()
+    {
+        MutableSectionBlockStates section = new(SectionGeometry.Side16, default, default);
+        LocalIndex index = new(17);
+        _ = section.TrySet(index, new BlockStateId(1));
+        ulong checksum = 0;
+
+        for (int warmup = 0; warmup < 256; warmup++)
+        {
+            BlockStateId state = new(checked((uint)(warmup & 1)));
+            checksum = unchecked((checksum * 31UL) ^ (uint)section.TrySet(index, state));
+        }
+
+        long allocatedBytes = long.MaxValue;
+        for (int probe = 0; probe < 8 && allocatedBytes != 0; probe++)
+        {
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int edit = 0; edit < 256; edit++)
+            {
+                BlockStateId state = new(checked((uint)(edit & 1)));
+                checksum = unchecked((checksum * 31UL) ^ (uint)section.TrySet(index, state));
+            }
+
+            allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
+        }
+
+        GC.KeepAlive(checksum);
+        Assert.Equal(0, allocatedBytes);
+    }
+
+    [Theory]
+    [InlineData(16)]
+    [InlineData(32)]
+    public void AddingPaletteEntryWithinCapacityAllocatesNothing(int side)
+    {
+        SectionGeometry geometry = Geometry(side);
+        for (int warmup = 0; warmup < 64; warmup++)
+        {
+            MutableSectionBlockStates warm = CreateThreeEntryPalette(geometry);
+            _ = warm.TrySet(new LocalIndex(3), new BlockStateId(3));
+        }
+
+        MutableSectionBlockStates section = CreateThreeEntryPalette(geometry);
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        SectionWriteResult result = section.TrySet(new LocalIndex(3), new BlockStateId(3));
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.Equal(SectionWriteResult.Changed, result);
+        Assert.Equal(0, allocated);
+        Assert.Equal(4, section.GetStorageMetrics().PaletteEntryCount);
+        Assert.Equal(new BlockStateId(3), section.Get(new LocalIndex(3)));
+    }
+
+    [Theory]
+    [InlineData(16)]
+    [InlineData(32)]
+    public void RevisionExhaustionRefusesInPlacePaletteGrowthAtomically(int side)
+    {
+        SectionGeometry geometry = Geometry(side);
+        MutableSectionBlockStates section = new(
+            geometry,
+            default,
+            new SectionRevision(long.MaxValue - 2));
+        _ = section.TrySet(new LocalIndex(1), new BlockStateId(1));
+        _ = section.TrySet(new LocalIndex(2), new BlockStateId(2));
+
+        Assert.Equal(SectionWriteResult.RevisionExhausted, section.TrySet(new LocalIndex(3), new BlockStateId(3)));
+        Assert.Equal(new SectionRevision(long.MaxValue), section.Revision);
+        Assert.Equal(3, section.GetStorageMetrics().PaletteEntryCount);
+        Assert.Equal(default, section.Get(new LocalIndex(3)));
+    }
+
+    [Fact]
     public void SnapshotCompactsSortsAndRemainsImmutable()
     {
         SectionGeometry geometry = SectionGeometry.Side16;
@@ -205,6 +305,32 @@ public sealed class SectionBlockStatesTests
         snapshot.CopyTo(actual);
         Assert.Equal(expected, actual);
         Assert.Equal(SectionBlockStorageKind.Direct, snapshot.StorageKind);
+    }
+
+    [Fact]
+    public void SnapshotFastPathsShareOnlyImmutableUniformStorageAndCloneDirectOnce()
+    {
+        MutableSectionBlockStates uniform = new(SectionGeometry.Side32, new BlockStateId(7), default);
+        SectionBlockStateSnapshot uniformSnapshot = uniform.CaptureSnapshot();
+        Assert.Same(GetStorage(uniform), GetPrivateField(uniformSnapshot, "_storage"));
+
+        BlockStateId[] semantic = SectionCandidateFixture.CreateStates(SectionGeometry.Side32, SectionFixtureKind.HighEntropy);
+        MutableSectionBlockStates direct = SectionCandidateFixture.CreateSection(SectionGeometry.Side32, semantic);
+        for (int warmup = 0; warmup < 8; warmup++)
+        {
+            _ = direct.CaptureSnapshot();
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        SectionBlockStateSnapshot directSnapshot = direct.CaptureSnapshot();
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        object directStorage = GetStorage(direct);
+        object snapshotStorage = GetPrivateField(directSnapshot, "_storage");
+
+        Assert.NotSame(directStorage, snapshotStorage);
+        Assert.NotSame(GetPrivateField(directStorage, "_states"), GetPrivateField(snapshotStorage, "_states"));
+        Assert.InRange(allocated, semantic.LongLength * sizeof(uint), (semantic.LongLength * sizeof(uint)) + 32768);
+        Assert.Equal(semantic[12345], directSnapshot.Get(new LocalIndex(12345)));
     }
 
     [Fact]
@@ -462,6 +588,26 @@ public sealed class SectionBlockStatesTests
         BlockStateId[] palette = (BlockStateId[])(paletteField.GetValue(storage) ?? throw new InvalidOperationException("Palette is missing."));
         int count = snapshot.GetStorageMetrics().PaletteEntryCount;
         return [.. palette[..count].Select(value => value.Value)];
+    }
+
+    private static object GetStorage(MutableSectionBlockStates section)
+    {
+        return GetPrivateField(section, "_storage");
+    }
+
+    private static MutableSectionBlockStates CreateThreeEntryPalette(SectionGeometry geometry)
+    {
+        MutableSectionBlockStates section = new(geometry, default, default);
+        _ = section.TrySet(new LocalIndex(1), new BlockStateId(1));
+        _ = section.TrySet(new LocalIndex(2), new BlockStateId(2));
+        return section;
+    }
+
+    private static object GetPrivateField(object instance, string name)
+    {
+        FieldInfo field = instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"{instance.GetType().Name}.{name} is missing.");
+        return field.GetValue(instance) ?? throw new InvalidOperationException($"{instance.GetType().Name}.{name} is null.");
     }
 
     private static SectionGeometry Geometry(int side)

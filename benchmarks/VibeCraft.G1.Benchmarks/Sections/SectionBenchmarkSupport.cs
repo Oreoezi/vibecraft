@@ -233,6 +233,8 @@ internal sealed record SectionObservationManifest(
     string Runtime,
     string Sdk,
     string AssemblyConfiguration,
+    string DotnetTieredCompilation,
+    string DotnetTieredPgo,
     string OperatingSystem,
     string ProcessArchitecture,
     string Cpu,
@@ -261,7 +263,10 @@ internal sealed record SectionObservationManifest(
     internal static SectionObservationManifest Capture(
         ulong seed,
         string command,
-        string invocationContext)
+        string invocationContext,
+        string evidenceClassification = "observational",
+        string? classificationReason = null,
+        string g0Status = "PROVISIONAL — owner acceptance required")
     {
         string? repositoryRoot = RunProcess("git", ["rev-parse", "--show-toplevel"]);
         bool dirty = GetGitDirtyState();
@@ -270,12 +275,15 @@ internal sealed record SectionObservationManifest(
         string assemblyPath = assembly.Location;
         string? executablePath = Environment.ProcessPath;
         HostMemory memory = CaptureHostMemory();
-        const string g0Status = "PROVISIONAL — owner acceptance required";
-        string reason = dirty
-            ? "Observational only: the working tree is dirty and G0 remains provisional."
-            : "Observational only: G0 remains provisional and owner acceptance is absent.";
+        string reason = classificationReason ?? (string.Equals(evidenceClassification, "observational", StringComparison.Ordinal)
+            ? dirty
+                ? "Observational only: the working tree is dirty and G0 remains provisional."
+                : "Observational only: G0 remains provisional and owner acceptance is absent."
+            : dirty
+                ? $"{evidenceClassification} only: the working tree is dirty and G0 remains provisional."
+                : $"{evidenceClassification} only: G0 remains provisional and owner acceptance is absent.");
         return new SectionObservationManifest(
-            "observational",
+            evidenceClassification,
             reason,
             RunProcess("git", ["rev-parse", "HEAD"]) ?? "unrecorded-working-tree",
             dirty,
@@ -289,6 +297,8 @@ internal sealed record SectionObservationManifest(
             RuntimeInformation.FrameworkDescription,
             GetSdkVersion(),
             assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration ?? "unknown",
+            Environment.GetEnvironmentVariable("DOTNET_TieredCompilation") ?? "unset",
+            Environment.GetEnvironmentVariable("DOTNET_TieredPGO") ?? "unset",
             RuntimeInformation.OSDescription,
             RuntimeInformation.ProcessArchitecture.ToString(),
             GetCpuDescription(),

@@ -27,9 +27,14 @@ internal sealed class MutableSectionBlockStates : IReadOnlySectionBlockStates
 
     public SectionBlockStorageKind StorageKind => _storage.Kind;
 
+    public BlockStateId Get(LocalIndex index)
+    {
+        return _storage.Get(index);
+    }
+
     public BlockStateId Get(LocalBlock local)
     {
-        return _storage.Get(Geometry.GetLocalIndex(local));
+        return Get(Geometry.GetLocalIndex(local));
     }
 
     public void CopyTo(Span<BlockStateId> destination)
@@ -49,7 +54,11 @@ internal sealed class MutableSectionBlockStates : IReadOnlySectionBlockStates
 
     internal SectionWriteResult TrySet(LocalBlock local, BlockStateId state)
     {
-        LocalIndex index = Geometry.GetLocalIndex(local);
+        return TrySet(Geometry.GetLocalIndex(local), state);
+    }
+
+    internal SectionWriteResult TrySet(LocalIndex index, BlockStateId state)
+    {
         if (_storage.Get(index).Equals(state))
         {
             return SectionWriteResult.Unchanged;
@@ -68,6 +77,16 @@ internal sealed class MutableSectionBlockStates : IReadOnlySectionBlockStates
 
     internal SectionBlockStateSnapshot CaptureSnapshot()
     {
+        if (_storage is UniformBlockStateStorage uniform)
+        {
+            return SectionBlockStateSnapshot.CreateFromUniformStorage(Geometry, Revision, uniform);
+        }
+
+        if (_storage is DirectBlockStateStorage direct && direct.HasMoreThanSnapshotPaletteLimit())
+        {
+            return SectionBlockStateSnapshot.CreateFromDirectStorage(Geometry, Revision, direct);
+        }
+
         BlockStateId[] states = new BlockStateId[Count];
         _storage.CopyTo(states);
         return SectionBlockStateSnapshot.Create(Geometry, Revision, states);
