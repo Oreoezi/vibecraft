@@ -155,7 +155,16 @@ jobs:
           foreach ($criterionName in @('semantic-and-projection-correctness', 'zero-allocation-warmed-reads', 'positive-measured-durations', 'storage-neutral-logical-diagnostics')) {
             $criterion = @($report.diagnosticAssessment.criteria | Where-Object { $_.name -eq $criterionName })
             if ($criterion.Count -ne 1 -or $criterion[0].status -ne 'pass') {
-              Fail-E1 "The required E1-r1 smoke criterion '$criterionName' did not pass."
+              $detail = ''
+              if ($criterionName -eq 'zero-allocation-warmed-reads') {
+                $nonzeroReads = @(
+                  Get-Content $rawPath | ForEach-Object { $_ | ConvertFrom-Json } |
+                    Where-Object { $_.kind -eq 'paired-measurement' -and $_.metric -like '*read*' -and $_.allocatedBytes -ne 0 } |
+                    Select-Object -First 8 cubeOrdinal, distribution, metric, candidate, allocatedBytes
+                )
+                $detail = " Raw observations: $($nonzeroReads | ConvertTo-Json -Compress)"
+              }
+              Fail-E1 "The required E1-r1 smoke criterion '$criterionName' did not pass.$detail"
             }
           }
           $evidenceNames = @('e1-r1-core-data-diagnostic.json', 'e1-r1-core-data-diagnostic.md', 'e1-r1-core-data-raw.ndjson')
