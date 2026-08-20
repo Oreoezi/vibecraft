@@ -93,6 +93,7 @@ internal static class E1CoreDataReport
             {
                 E1RunAccumulator accumulator = new(options, raw);
                 accumulator.RecordPaletteBoundaries();
+                WarmAllocationCounter();
                 accumulator.RunCorpus();
                 E1MemoryReport memory = RunFreshProcessMemory(options);
                 E1ReportDocument document = accumulator.CreateDocument(manifest, memory);
@@ -334,6 +335,14 @@ internal static class E1CoreDataReport
         }
 
         Thread.Sleep(TimeSpan.FromMilliseconds(100));
+    }
+
+    private static void WarmAllocationCounter()
+    {
+        for (int iteration = 0; iteration < 4; iteration++)
+        {
+            _ = GC.GetAllocatedBytesForCurrentThread();
+        }
     }
 
     private static E1MemoryReport RunFreshProcessMemory(E1Options options)
