@@ -10,7 +10,7 @@ public sealed class SectionCandidateFixtureTests
     [Fact]
     public void FixtureIdentityAndSeedAreExplicit()
     {
-        Assert.Equal("VC-G1-E1-SECTIONS-0.1.0", SectionCandidateFixture.FixtureId);
+        Assert.Equal("VC-G1-E1-SECTIONS-1.0.0", SectionCandidateFixture.FixtureId);
         Assert.Equal(0x5643424654314531UL, SectionCandidateFixture.DefaultSeed);
     }
 

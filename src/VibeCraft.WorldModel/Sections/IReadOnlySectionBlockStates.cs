@@ -14,6 +14,8 @@ internal interface IReadOnlySectionBlockStates
 
     SectionBlockStorageKind StorageKind { get; }
 
+    BlockStateId Get(LocalIndex index);
+
     BlockStateId Get(LocalBlock local);
 
     void CopyTo(Span<BlockStateId> destination);

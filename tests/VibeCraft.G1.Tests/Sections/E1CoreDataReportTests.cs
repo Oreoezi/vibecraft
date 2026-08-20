@@ -16,8 +16,8 @@ namespace VibeCraft.G1.Tests.Sections;
 public sealed class E1CoreDataReportTests
 {
     private const string G0FixtureId = "VC-G0-FP-0.1.0";
-    private const string SectionFixtureId = "VC-G1-E1-SECTIONS-0.1.0";
-    private const string SemanticFingerprintDomain = "VC-G1-E1-SEMANTIC-FP-0.1.0";
+    private const string SectionFixtureId = "VC-G1-E1-SECTIONS-1.0.0";
+    private const string SemanticFingerprintDomain = "VC-G1-E1-SEMANTIC-FP-1.0.0";
     private const ulong Seed = 0x5643424654314531UL;
     private const ulong CubeSeedIncrement = 0x9E3779B97F4A7C15UL;
     private const int CorpusCubeCount = 12_500;
@@ -35,6 +35,24 @@ public sealed class E1CoreDataReportTests
         Assert.Equal(SectionFixtureId, SectionCandidateFixture.FixtureId);
         Assert.Equal(Seed, SectionCandidateFixture.DefaultSeed);
         Assert.Equal("VC-G1-E1-LOGICAL-PROJECTION-0.1.0", CanonicalLogicalProjectionCodecV1.FixtureId);
+    }
+
+    [Fact]
+    public void HistoricalFailedBaselineArtifactsRemainByteExact()
+    {
+        string root = FindRepositoryRoot();
+        AssertArtifactHash(
+            root,
+            "e1-core-data-observation.json",
+            "239f7fcf0423de12f156f73fabaaa6bfda34dbc185988336dab9ed424ee99d06");
+        AssertArtifactHash(
+            root,
+            "e1-core-data-observation.md",
+            "971205d601e1dc4c0fcfacb8b47a014c795ecb8542eaa026c6e5205456ad8ab1");
+        AssertArtifactHash(
+            root,
+            "e1-core-data-raw.ndjson",
+            "2028eacc44cc9c9b3e45bd3b96d0235d7c7bd3f5959ead230ba31deb0131eb5f");
     }
 
     [Theory]
@@ -136,6 +154,65 @@ public sealed class E1CoreDataReportTests
         }
     }
 
+    [Theory]
+    [InlineData((int)SectionEqualVolumeLayout.OneSide32)]
+    [InlineData((int)SectionEqualVolumeLayout.EightSide16)]
+    public void PrecomputedAddressesKeepDenseAndAdaptiveReadsAndEditsEquivalent(int layoutValue)
+    {
+        SectionEqualVolumeLayout layout = (SectionEqualVolumeLayout)layoutValue;
+        BlockStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(SectionFixtureKind.Mixed, Seed);
+        MutableSectionBlockStates[] adaptive = SectionEqualVolumeFixture.CreateSections(layout, canonical);
+        BlockStateId[][] dense = SectionEqualVolumeFixture.CreateDenseSections(layout, canonical);
+        int[] globalTrace = CreateReadTrace(random: true);
+        SectionCellAddress[] addresses = SectionEqualVolumeFixture.CreateAddressTrace(layout, globalTrace);
+
+        for (int index = 0; index < addresses.Length; index++)
+        {
+            Assert.Equal(
+                canonical[globalTrace[index]],
+                SectionEqualVolumeFixture.GetAddressedUnchecked(adaptive, addresses[index]));
+            Assert.Equal(
+                canonical[globalTrace[index]],
+                SectionEqualVolumeFixture.GetDenseAddressedUnchecked(dense, addresses[index]));
+        }
+
+        SectionEdit[] edits = SectionEqualVolumeFixture.CreateEditTrace(
+            canonical,
+            SectionEditTraceKind.BoundaryClusters,
+            Seed,
+            clusterCount: 2);
+        SectionAddressedEdit[] addressedEdits = SectionEqualVolumeFixture.CreateAddressedEditTrace(layout, edits);
+        foreach (SectionAddressedEdit edit in addressedEdits)
+        {
+            Assert.Equal(
+                SectionEqualVolumeFixture.SetAddressedUnchecked(adaptive, edit),
+                SectionEqualVolumeFixture.SetDenseAddressedUnchecked(dense, edit));
+        }
+
+        BlockStateId[] adaptiveResult = CopyLayout(adaptive, layout);
+        BlockStateId[] denseResult = new BlockStateId[SectionEqualVolumeFixture.CubeVolume];
+        SectionEqualVolumeFixture.CopyDenseToCanonical(dense, layout, denseResult);
+        Assert.Equal(adaptiveResult, denseResult);
+    }
+
+    [Theory]
+    [InlineData((int)SectionFixtureKind.UniformAir, 4L, 32L)]
+    [InlineData((int)SectionFixtureKind.Layered, 8208L, 4176L)]
+    [InlineData((int)SectionFixtureKind.Mixed, 24832L, 26624L)]
+    [InlineData((int)SectionFixtureKind.HighEntropy, 131072L, 131072L)]
+    public void BaselineKnownPayloadPinsTheSide32SpatialGranularityCause(
+        int fixtureValue,
+        long expectedOneSide32,
+        long expectedEightSide16)
+    {
+        BlockStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube((SectionFixtureKind)fixtureValue, Seed);
+        MutableSectionBlockStates[] oneSide32 = SectionEqualVolumeFixture.CreateSections(SectionEqualVolumeLayout.OneSide32, canonical);
+        MutableSectionBlockStates[] eightSide16 = SectionEqualVolumeFixture.CreateSections(SectionEqualVolumeLayout.EightSide16, canonical);
+
+        Assert.Equal(expectedOneSide32, oneSide32.Sum(section => section.GetStorageMetrics().KnownPayloadBytes));
+        Assert.Equal(expectedEightSide16, eightSide16.Sum(section => section.GetStorageMetrics().KnownPayloadBytes));
+    }
+
     [Fact]
     public void SnapshotCreationComparisonConsumesPerSnapshotMetadataWhileSemanticChecksRemainSeparate()
     {
@@ -160,10 +237,10 @@ public sealed class E1CoreDataReportTests
     }
 
     [Theory]
-    [InlineData(0, "f46ed79a49c04dfad1468a281639350f8b5a2c57f0c36cb9170490d46ecaffa9")]
-    [InlineData(1, "d7951bab8dfc5ce8f21a7036068ec22c2d68ac7cb08200ee300549819d50da28")]
-    [InlineData(2, "a1b3d8d06464ad9d3971f10c0b1b5c8b657c8c065887b903bb77eb2776aa5f1c")]
-    [InlineData(3, "68edd29c671913d39253eaca55cb8a57a0de607d2ba0682521764ef4c874b393")]
+    [InlineData(0, "1cc0ad80e0af655bd30ae270c26e2a09d5f6161ed051ecd43ab979378efb70da")]
+    [InlineData(1, "51f27cf0fc311bf4f01426de89c890130f931839d171eb60a091aaeed6b20e66")]
+    [InlineData(2, "c07c41c814ebb17c18ee039784f0ed6d51c48d3c0608ae969d3626b4c28812c8")]
+    [InlineData(3, "db082f571700fb72bcb7c1b18451b627199c9c79ce33817ae11dfe13de3c5709")]
     public void SemanticFingerprintIsRepresentationIndependentAndPinned(int ordinal, string expectedHash)
     {
         (SectionFixtureKind kind, ulong cubeSeed) = GetCorpusEntry(ordinal);
@@ -259,6 +336,29 @@ public sealed class E1CoreDataReportTests
         Assert.Equal(SectionEqualVolumeFixture.DefaultClusterCount * SectionEqualVolumeFixture.EditsPerCluster, full.Length);
         Assert.Equal(smoke, SectionEqualVolumeFixture.CreateEditTrace(canonical, traceKind, Seed, clusterCount: 2));
         Assert.Equal(full, SectionEqualVolumeFixture.CreateEditTrace(canonical, traceKind, Seed, SectionEqualVolumeFixture.DefaultClusterCount));
+    }
+
+    [Fact]
+    public void EveryE1DistributionEditTraceContainsAllDeclaredIntents()
+    {
+        foreach (SectionFixtureKind fixture in new[]
+        {
+            SectionFixtureKind.UniformAir,
+            SectionFixtureKind.UniformStone,
+            SectionFixtureKind.Layered,
+            SectionFixtureKind.Mixed,
+            SectionFixtureKind.HighEntropy,
+        })
+        {
+            BlockStateId[] canonical = SectionEqualVolumeFixture.CreateCanonicalCube(fixture, Seed);
+            foreach (SectionEditTraceKind traceKind in Enum.GetValues<SectionEditTraceKind>())
+            {
+                SectionEdit[] trace = SectionEqualVolumeFixture.CreateEditTrace(canonical, traceKind, Seed, clusterCount: 2);
+                Assert.Contains(trace, edit => edit.Intent == SectionEditIntent.NoOp);
+                Assert.Contains(trace, edit => edit.Intent == SectionEditIntent.ExistingStateChange);
+                Assert.Contains(trace, edit => edit.Intent == SectionEditIntent.NewStateChange);
+            }
+        }
     }
 
     private static (SectionFixtureKind Kind, ulong CubeSeed) GetCorpusEntry(int ordinal)
@@ -416,5 +516,28 @@ public sealed class E1CoreDataReportTests
     private static BlockStateId[][] CreateSide16Scratch()
     {
         return [.. Enumerable.Range(0, 8).Select(_ => new BlockStateId[16 * 16 * 16])];
+    }
+
+    private static void AssertArtifactHash(string root, string name, string expected)
+    {
+        string path = Path.Combine(root, "artifacts", "g1", "e1", "full-observational", name);
+        using FileStream stream = File.OpenRead(path);
+        Assert.Equal(expected, Convert.ToHexStringLower(SHA256.HashData(stream)));
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "VibeCraft.slnx")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate the VibeCraft repository root.");
     }
 }

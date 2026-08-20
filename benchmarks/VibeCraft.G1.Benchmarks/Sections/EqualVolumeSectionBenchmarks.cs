@@ -9,11 +9,13 @@ namespace VibeCraft.G1.Benchmarks.Sections;
 public class EqualVolumeSectionReadBenchmarks
 {
     private BlockStateId[] _canonical = null!;
+    private BlockStateId[][] _denseSections = null!;
     private SectionEqualVolumeLayout _layout;
-    private IReadOnlySectionBlockStates[] _sections = null!;
+    private MutableSectionBlockStates[] _sections = null!;
     private BlockStateId[] _projection = null!;
     private BlockStateId[][] _side16Scratch = null!;
-    private int[] _randomTrace = null!;
+    private SectionCellAddress[] _randomTrace = null!;
+    private SectionCellAddress[] _linearTrace = null!;
 
     [Params("OneSide32", "EightSide16")]
     public string Layout { get; set; } = "OneSide32";
@@ -29,15 +31,24 @@ public class EqualVolumeSectionReadBenchmarks
         _layout = SectionBenchmarkSupport.ParseLayout(Layout);
         _canonical = SectionEqualVolumeFixture.CreateCanonicalCube(SectionBenchmarkSupport.ParseFixture(Fixture), seed);
         _sections = SectionEqualVolumeFixture.CreateSections(_layout, _canonical);
+        _denseSections = SectionEqualVolumeFixture.CreateDenseSections(_layout, _canonical);
         SectionEqualVolumeFixture.ValidateSections(_sections, _layout);
         SectionBenchmarkSupport.ValidateEqualWorld(_sections, _layout, _canonical);
         _projection = new BlockStateId[_canonical.Length];
         _side16Scratch = SectionBenchmarkSupport.CreateSide16Scratch();
         SectionEqualVolumeFixture.CopyToCanonical(_sections, _layout, _projection, _side16Scratch);
-        _randomTrace = SectionBenchmarkSupport.CreateRandomTrace(
+        int[] randomGlobalTrace = SectionBenchmarkSupport.CreateRandomTrace(
             SectionBenchmarkSupport.RandomTraceLength,
             _canonical.Length,
             seed ^ 0xE7037ED1A0B428DBUL);
+        _randomTrace = SectionEqualVolumeFixture.CreateAddressTrace(_layout, randomGlobalTrace);
+        int[] linearGlobalTrace = new int[_canonical.Length];
+        for (int index = 0; index < linearGlobalTrace.Length; index++)
+        {
+            linearGlobalTrace[index] = index;
+        }
+
+        _linearTrace = SectionEqualVolumeFixture.CreateAddressTrace(_layout, linearGlobalTrace);
     }
 
     [Benchmark]
@@ -45,9 +56,9 @@ public class EqualVolumeSectionReadBenchmarks
     public ulong AdaptiveRandomReads()
     {
         ulong checksum = 0;
-        foreach (int index in _randomTrace)
+        foreach (SectionCellAddress address in _randomTrace)
         {
-            checksum = unchecked((checksum * 0x100000001B3UL) ^ SectionEqualVolumeFixture.GetGlobalUnchecked(_sections, _layout, index).Value);
+            checksum = unchecked((checksum * 0x100000001B3UL) ^ SectionEqualVolumeFixture.GetAddressedUnchecked(_sections, address).Value);
         }
 
         return checksum;
@@ -58,9 +69,9 @@ public class EqualVolumeSectionReadBenchmarks
     public ulong DenseRandomReads()
     {
         ulong checksum = 0;
-        foreach (int index in _randomTrace)
+        foreach (SectionCellAddress address in _randomTrace)
         {
-            checksum = unchecked((checksum * 0x100000001B3UL) ^ _canonical[index].Value);
+            checksum = unchecked((checksum * 0x100000001B3UL) ^ SectionEqualVolumeFixture.GetDenseAddressedUnchecked(_denseSections, address).Value);
         }
 
         return checksum;
@@ -71,9 +82,9 @@ public class EqualVolumeSectionReadBenchmarks
     public ulong AdaptiveLinearReads()
     {
         ulong checksum = 0;
-        for (int index = 0; index < _canonical.Length; index++)
+        foreach (SectionCellAddress address in _linearTrace)
         {
-            checksum = unchecked((checksum * 0x100000001B3UL) ^ SectionEqualVolumeFixture.GetGlobalUnchecked(_sections, _layout, index).Value);
+            checksum = unchecked((checksum * 0x100000001B3UL) ^ SectionEqualVolumeFixture.GetAddressedUnchecked(_sections, address).Value);
         }
 
         return checksum;
@@ -83,7 +94,13 @@ public class EqualVolumeSectionReadBenchmarks
     [BenchmarkCategory("EqualVolumeLinearReads")]
     public ulong DenseLinearReads()
     {
-        return SectionBenchmarkSupport.Checksum(_canonical);
+        ulong checksum = 0;
+        foreach (SectionCellAddress address in _linearTrace)
+        {
+            checksum = unchecked((checksum * 0x100000001B3UL) ^ SectionEqualVolumeFixture.GetDenseAddressedUnchecked(_denseSections, address).Value);
+        }
+
+        return checksum;
     }
 
     [Benchmark]
@@ -91,9 +108,9 @@ public class EqualVolumeSectionReadBenchmarks
     public ulong CaptureSnapshots()
     {
         ulong checksum = 0;
-        foreach (IReadOnlySectionBlockStates candidate in _sections)
+        foreach (MutableSectionBlockStates candidate in _sections)
         {
-            SectionBlockStateSnapshot snapshot = ((MutableSectionBlockStates)candidate).CaptureSnapshot();
+            SectionBlockStateSnapshot snapshot = candidate.CaptureSnapshot();
             checksum = unchecked((checksum * 31UL) ^ checked((ulong)snapshot.GetStorageMetrics().KnownPayloadBytes));
         }
 
@@ -114,15 +131,16 @@ public class EqualVolumeSectionReadBenchmarks
 public class EqualVolumeSectionEditBenchmarks
 {
     private BlockStateId[] _canonical = null!;
-    private BlockStateId[] _denseCandidate = null!;
+    private BlockStateId[][] _denseCandidate = null!;
     private SectionEqualVolumeLayout _layout;
     private MutableSectionBlockStates[] _adaptiveCandidate = null!;
     private SectionEdit[] _trace = null!;
+    private SectionAddressedEdit[] _addressedTrace = null!;
 
     [Params("OneSide32", "EightSide16")]
     public string Layout { get; set; } = "OneSide32";
 
-    [Params("Mixed", "HighEntropy")]
+    [Params("UniformAir", "UniformStone", "Layered", "Mixed", "HighEntropy")]
     public string Fixture { get; set; } = "Mixed";
 
     [Params("InteriorClusters", "BoundaryClusters")]
@@ -140,6 +158,7 @@ public class EqualVolumeSectionEditBenchmarks
             SectionBenchmarkSupport.ParseTrace(Trace),
             seed,
             SectionEqualVolumeFixture.DefaultClusterCount);
+        _addressedTrace = SectionEqualVolumeFixture.CreateAddressedEditTrace(_layout, _trace);
         if (!_trace.Any(edit => edit.Intent == SectionEditIntent.NoOp) ||
             !_trace.Any(edit => edit.Intent == SectionEditIntent.ExistingStateChange))
         {
@@ -159,17 +178,17 @@ public class EqualVolumeSectionEditBenchmarks
     [IterationSetup(Target = nameof(DenseClusteredEdits))]
     public void SetupDense()
     {
-        _denseCandidate = (BlockStateId[])_canonical.Clone();
+        _denseCandidate = SectionEqualVolumeFixture.CreateDenseSections(_layout, _canonical);
     }
 
     [Benchmark]
     public ulong AdaptiveClusteredEdits()
     {
         ulong checksum = 0xCBF29CE484222325UL;
-        foreach (SectionEdit edit in _trace)
+        foreach (SectionAddressedEdit edit in _addressedTrace)
         {
-            SectionWriteResult result = SectionEqualVolumeFixture.SetGlobalUnchecked(_adaptiveCandidate, _layout, edit);
-            checksum = SectionBenchmarkSupport.AddEditChecksum(checksum, edit, result);
+            SectionWriteResult result = SectionEqualVolumeFixture.SetAddressedUnchecked(_adaptiveCandidate, edit);
+            checksum = SectionBenchmarkSupport.AddEditChecksum(checksum, edit.Edit, result);
         }
 
         return checksum;
@@ -179,10 +198,10 @@ public class EqualVolumeSectionEditBenchmarks
     public ulong DenseClusteredEdits()
     {
         ulong checksum = 0xCBF29CE484222325UL;
-        foreach (SectionEdit edit in _trace)
+        foreach (SectionAddressedEdit edit in _addressedTrace)
         {
-            SectionWriteResult result = SetDenseUnchecked(_denseCandidate, edit);
-            checksum = SectionBenchmarkSupport.AddEditChecksum(checksum, edit, result);
+            SectionWriteResult result = SectionEqualVolumeFixture.SetDenseAddressedUnchecked(_denseCandidate, edit);
+            checksum = SectionBenchmarkSupport.AddEditChecksum(checksum, edit.Edit, result);
         }
 
         return checksum;
@@ -190,30 +209,21 @@ public class EqualVolumeSectionEditBenchmarks
 
     private void ValidateTraceEquivalence()
     {
-        BlockStateId[] dense = (BlockStateId[])_canonical.Clone();
+        BlockStateId[][] dense = SectionEqualVolumeFixture.CreateDenseSections(_layout, _canonical);
         MutableSectionBlockStates[] adaptive = SectionEqualVolumeFixture.CreateSections(_layout, _canonical);
-        foreach (SectionEdit edit in _trace)
+        foreach (SectionAddressedEdit edit in _addressedTrace)
         {
-            SectionWriteResult denseResult = SectionEqualVolumeFixture.SetDense(dense, edit);
-            SectionWriteResult adaptiveResult = SectionEqualVolumeFixture.SetGlobal(adaptive, _layout, edit);
+            SectionWriteResult denseResult = SectionEqualVolumeFixture.SetDenseAddressedUnchecked(dense, edit);
+            SectionWriteResult adaptiveResult = SectionEqualVolumeFixture.SetAddressedUnchecked(adaptive, edit);
             if (denseResult != adaptiveResult)
             {
-                throw new InvalidOperationException($"Adaptive/dense edit result mismatch at global index {edit.GlobalIndex}.");
+                throw new InvalidOperationException($"Adaptive/dense edit result mismatch at global index {edit.Edit.GlobalIndex}.");
             }
         }
 
-        SectionBenchmarkSupport.ValidateEqualWorld(adaptive, _layout, dense);
-    }
-
-    private static SectionWriteResult SetDenseUnchecked(Span<BlockStateId> dense, SectionEdit edit)
-    {
-        if (dense[edit.GlobalIndex].Equals(edit.State))
-        {
-            return SectionWriteResult.Unchanged;
-        }
-
-        dense[edit.GlobalIndex] = edit.State;
-        return SectionWriteResult.Changed;
+        BlockStateId[] denseCanonical = new BlockStateId[SectionEqualVolumeFixture.CubeVolume];
+        SectionEqualVolumeFixture.CopyDenseToCanonical(dense, _layout, denseCanonical);
+        SectionBenchmarkSupport.ValidateEqualWorld(adaptive, _layout, denseCanonical);
     }
 }
 
@@ -224,6 +234,7 @@ public class EqualVolumePaletteGrowthBenchmarks
     private SectionEqualVolumeLayout _layout;
     private MutableSectionBlockStates[] _candidate = null!;
     private SectionEdit[] _growthTrace = null!;
+    private SectionAddressedEdit[] _addressedGrowthTrace = null!;
 
     [Params("OneSide32", "EightSide16")]
     public string Layout { get; set; } = "OneSide32";
@@ -245,6 +256,8 @@ public class EqualVolumePaletteGrowthBenchmarks
                 new BlockStateId(checked((uint)index + 1U)),
                 SectionEditIntent.NewStateChange);
         }
+
+        _addressedGrowthTrace = SectionEqualVolumeFixture.CreateAddressedEditTrace(_layout, _growthTrace);
     }
 
     [IterationSetup]
@@ -260,10 +273,10 @@ public class EqualVolumePaletteGrowthBenchmarks
     public ulong PaletteGrowthAndRepack()
     {
         ulong checksum = 0;
-        foreach (SectionEdit edit in _growthTrace)
+        foreach (SectionAddressedEdit edit in _addressedGrowthTrace)
         {
-            SectionWriteResult result = SectionEqualVolumeFixture.SetGlobalUnchecked(_candidate, _layout, edit);
-            checksum = SectionBenchmarkSupport.AddEditChecksum(checksum, edit, result);
+            SectionWriteResult result = SectionEqualVolumeFixture.SetAddressedUnchecked(_candidate, edit);
+            checksum = SectionBenchmarkSupport.AddEditChecksum(checksum, edit.Edit, result);
         }
 
         return checksum;

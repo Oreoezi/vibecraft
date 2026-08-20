@@ -60,10 +60,10 @@ internal sealed class UniformBlockStateStorage : BlockStateStorage
 
 internal sealed class PalettedBlockStateStorage : BlockStateStorage
 {
-    private readonly int _paletteCount;
-    private readonly BlockStateId[] _palette;
-    private readonly Dictionary<BlockStateId, byte>? _reverseLookup;
-    private readonly PackedPaletteIndices _indices;
+    private int _paletteCount;
+    private BlockStateId[] _palette;
+    private Dictionary<BlockStateId, byte>? _reverseLookup;
+    private PackedPaletteIndices _indices;
 
     private PalettedBlockStateStorage(
         int count,
@@ -160,12 +160,10 @@ internal sealed class PalettedBlockStateStorage : BlockStateStorage
     internal override BlockStateStorage Set(LocalIndex index, BlockStateId state)
     {
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual((uint)index.Value, (uint)Count, nameof(index));
-        if (_reverseLookup is null)
-        {
-            throw new InvalidOperationException("An immutable snapshot representation cannot be mutated.");
-        }
+        Dictionary<BlockStateId, byte> reverseLookup = _reverseLookup
+            ?? throw new InvalidOperationException("An immutable snapshot representation cannot be mutated.");
 
-        if (_reverseLookup.TryGetValue(state, out byte paletteIndex))
+        if (reverseLookup.TryGetValue(state, out byte paletteIndex))
         {
             _indices.Set(index.Value, paletteIndex);
             return this;
@@ -179,23 +177,36 @@ internal sealed class PalettedBlockStateStorage : BlockStateStorage
             return new DirectBlockStateStorage(direct);
         }
 
+        byte addedPaletteIndex = checked((byte)_paletteCount);
         int nextCount = checked(_paletteCount + 1);
+        byte nextBits = GetBitsPerEntry(nextCount);
+        if (nextBits == _indices.BitsPerEntry)
+        {
+            reverseLookup.Add(state, addedPaletteIndex);
+            _palette[_paletteCount] = state;
+            _paletteCount = nextCount;
+            _indices.Set(index.Value, addedPaletteIndex);
+            return this;
+        }
+
         int nextCapacity = GetPaletteCapacity(nextCount);
         BlockStateId[] nextPalette = new BlockStateId[nextCapacity];
         Array.Copy(_palette, nextPalette, _paletteCount);
         nextPalette[_paletteCount] = state;
-
-        byte nextBits = GetBitsPerEntry(nextCount);
-        PackedPaletteIndices nextIndices = nextBits == _indices.BitsPerEntry
-            ? _indices.Clone()
-            : _indices.Repack(nextBits);
-        nextIndices.Set(index.Value, checked((byte)_paletteCount));
-
-        Dictionary<BlockStateId, byte> nextLookup = new(_reverseLookup)
+        PackedPaletteIndices nextIndices = _indices.Repack(nextBits);
+        nextIndices.Set(index.Value, addedPaletteIndex);
+        Dictionary<BlockStateId, byte> nextLookup = new(nextCapacity);
+        foreach (KeyValuePair<BlockStateId, byte> pair in reverseLookup)
         {
-            [state] = checked((byte)_paletteCount),
-        };
-        return new PalettedBlockStateStorage(Count, nextPalette, nextCount, nextIndices, nextLookup);
+            nextLookup.Add(pair.Key, pair.Value);
+        }
+
+        nextLookup.Add(state, addedPaletteIndex);
+        _palette = nextPalette;
+        _paletteCount = nextCount;
+        _indices = nextIndices;
+        _reverseLookup = nextLookup;
+        return this;
     }
 
     internal override SectionStorageMetrics GetMetrics()
@@ -269,5 +280,25 @@ internal sealed class DirectBlockStateStorage : BlockStateStorage
     internal override SectionStorageMetrics GetMetrics()
     {
         return new SectionStorageMetrics(Kind, Count, 0, 0, 32, 0, 0, 1, checked((long)Count * sizeof(uint)));
+    }
+
+    internal DirectBlockStateStorage CloneForSnapshot()
+    {
+        return new DirectBlockStateStorage((BlockStateId[])_states.Clone());
+    }
+
+    internal bool HasMoreThanSnapshotPaletteLimit()
+    {
+        HashSet<BlockStateId> distinct = new(257);
+        foreach (BlockStateId state in _states)
+        {
+            _ = distinct.Add(state);
+            if (distinct.Count > 256)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

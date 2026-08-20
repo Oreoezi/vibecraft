@@ -27,6 +27,14 @@ internal readonly record struct SectionEdit(
     BlockStateId State,
     SectionEditIntent Intent);
 
+internal readonly record struct SectionCellAddress(
+    int SectionIndex,
+    LocalIndex LocalIndex);
+
+internal readonly record struct SectionAddressedEdit(
+    SectionEdit Edit,
+    SectionCellAddress Address);
+
 /// <summary>
 /// Builds equal-world-volume candidates and deterministic global edit traces for the ephemeral G1 experiment.
 /// </summary>
@@ -76,6 +84,126 @@ internal static class SectionEqualVolumeFixture
         }
 
         return sections;
+    }
+
+    internal static BlockStateId[][] CreateDenseSections(
+        SectionEqualVolumeLayout layout,
+        ReadOnlySpan<BlockStateId> canonicalCube)
+    {
+        ValidateCanonicalCube(canonicalCube);
+        if (layout == SectionEqualVolumeLayout.OneSide32)
+        {
+            return [canonicalCube.ToArray()];
+        }
+
+        if (layout != SectionEqualVolumeLayout.EightSide16)
+        {
+            throw new ArgumentOutOfRangeException(nameof(layout), layout, "The equal-volume layout is undefined.");
+        }
+
+        BlockStateId[][] sections = new BlockStateId[8][];
+        for (int sectionY = 0; sectionY < 2; sectionY++)
+        {
+            for (int sectionZ = 0; sectionZ < 2; sectionZ++)
+            {
+                for (int sectionX = 0; sectionX < 2; sectionX++)
+                {
+                    int sectionIndex = GetSectionIndex(sectionX, sectionY, sectionZ);
+                    sections[sectionIndex] = SectionCandidateFixture.ExtractSide16(canonicalCube, sectionX, sectionY, sectionZ);
+                }
+            }
+        }
+
+        return sections;
+    }
+
+    internal static SectionCellAddress[] CreateAddressTrace(
+        SectionEqualVolumeLayout layout,
+        ReadOnlySpan<int> globalIndices)
+    {
+        ValidateLayout(layout);
+        SectionCellAddress[] addresses = new SectionCellAddress[globalIndices.Length];
+        for (int index = 0; index < globalIndices.Length; index++)
+        {
+            ValidateGlobalIndex(globalIndices[index]);
+            addresses[index] = GetCellAddressUnchecked(layout, globalIndices[index]);
+        }
+
+        return addresses;
+    }
+
+    internal static SectionAddressedEdit[] CreateAddressedEditTrace(
+        SectionEqualVolumeLayout layout,
+        ReadOnlySpan<SectionEdit> edits)
+    {
+        ValidateLayout(layout);
+        SectionAddressedEdit[] addressed = new SectionAddressedEdit[edits.Length];
+        for (int index = 0; index < edits.Length; index++)
+        {
+            ValidateGlobalIndex(edits[index].GlobalIndex);
+            addressed[index] = new SectionAddressedEdit(edits[index], GetCellAddressUnchecked(layout, edits[index].GlobalIndex));
+        }
+
+        return addressed;
+    }
+
+    internal static BlockStateId GetAddressedUnchecked(
+        MutableSectionBlockStates[] sections,
+        SectionCellAddress address)
+    {
+        return sections[address.SectionIndex].Get(address.LocalIndex);
+    }
+
+    internal static BlockStateId GetDenseAddressedUnchecked(
+        BlockStateId[][] sections,
+        SectionCellAddress address)
+    {
+        return sections[address.SectionIndex][address.LocalIndex.Value];
+    }
+
+    internal static SectionWriteResult SetAddressedUnchecked(
+        MutableSectionBlockStates[] sections,
+        SectionAddressedEdit edit)
+    {
+        return sections[edit.Address.SectionIndex].TrySet(edit.Address.LocalIndex, edit.Edit.State);
+    }
+
+    internal static SectionWriteResult SetDenseAddressedUnchecked(
+        BlockStateId[][] sections,
+        SectionAddressedEdit edit)
+    {
+        ref BlockStateId current = ref sections[edit.Address.SectionIndex][edit.Address.LocalIndex.Value];
+        if (current.Equals(edit.Edit.State))
+        {
+            return SectionWriteResult.Unchanged;
+        }
+
+        current = edit.Edit.State;
+        return SectionWriteResult.Changed;
+    }
+
+    internal static void CopyDenseToCanonical(
+        BlockStateId[][] sections,
+        SectionEqualVolumeLayout layout,
+        Span<BlockStateId> destination)
+    {
+        ValidateDenseSections(sections, layout);
+        if (destination.Length < CubeVolume)
+        {
+            throw new ArgumentException($"The canonical projection requires at least {CubeVolume} states.", nameof(destination));
+        }
+
+        if (layout == SectionEqualVolumeLayout.OneSide32)
+        {
+            sections[0].CopyTo(destination);
+            return;
+        }
+
+        for (int globalIndex = 0; globalIndex < CubeVolume; globalIndex++)
+        {
+            SectionCellAddress address = GetCellAddressUnchecked(layout, globalIndex);
+            destination[globalIndex] = GetDenseAddressedUnchecked(sections, address);
+        }
     }
 
     internal static BlockStateId GetGlobal(
@@ -254,7 +382,8 @@ internal static class SectionEqualVolumeFixture
         }
 
         BlockStateId[] working = canonicalCube.ToArray();
-        BlockStateId[] existingStates = [.. canonicalCube.ToArray().Distinct().OrderBy(state => state.Value)];
+        List<BlockStateId> existingStates = [.. canonicalCube.ToArray().Distinct().OrderBy(state => state.Value)];
+        HashSet<BlockStateId> knownStates = [.. existingStates];
         SectionEdit[] trace = new SectionEdit[checked(clusterCount * EditsPerCluster)];
         ulong random = seed ^ ((ulong)traceKind * 0xA0761D6478BD642FUL);
         int traceIndex = 0;
@@ -287,6 +416,10 @@ internal static class SectionEqualVolumeFixture
                         if (actualIntent != SectionEditIntent.NoOp)
                         {
                             working[globalIndex] = state;
+                            if (knownStates.Add(state))
+                            {
+                                existingStates.Add(state);
+                            }
                         }
 
                         traceIndex++;
@@ -341,7 +474,7 @@ internal static class SectionEqualVolumeFixture
 
     private static BlockStateId SelectEditState(
         BlockStateId current,
-        BlockStateId[] existingStates,
+        List<BlockStateId> existingStates,
         SectionEditIntent requestedIntent,
         int traceIndex,
         out SectionEditIntent actualIntent)
@@ -352,12 +485,12 @@ internal static class SectionEqualVolumeFixture
             return current;
         }
 
-        if (requestedIntent == SectionEditIntent.ExistingStateChange && existingStates.Length > 1)
+        if (requestedIntent == SectionEditIntent.ExistingStateChange && existingStates.Count > 1)
         {
-            int start = traceIndex % existingStates.Length;
-            for (int offset = 0; offset < existingStates.Length; offset++)
+            int start = traceIndex % existingStates.Count;
+            for (int offset = 0; offset < existingStates.Count; offset++)
             {
-                BlockStateId candidate = existingStates[(start + offset) % existingStates.Length];
+                BlockStateId candidate = existingStates[(start + offset) % existingStates.Count];
                 if (!candidate.Equals(current))
                 {
                     actualIntent = requestedIntent;
@@ -453,6 +586,43 @@ internal static class SectionEqualVolumeFixture
     private static void ValidateGlobalIndex(int globalIndex)
     {
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual((uint)globalIndex, (uint)CubeVolume, nameof(globalIndex));
+    }
+
+    private static SectionCellAddress GetCellAddressUnchecked(
+        SectionEqualVolumeLayout layout,
+        int globalIndex)
+    {
+        if (layout == SectionEqualVolumeLayout.OneSide32)
+        {
+            return new SectionCellAddress(0, new LocalIndex(globalIndex));
+        }
+
+        DecomposeGlobalIndex(globalIndex, out int x, out int y, out int z);
+        return new SectionCellAddress(
+            GetSectionIndex(x >> 4, y >> 4, z >> 4),
+            Side16LocalIndexTrace[globalIndex]);
+    }
+
+    private static void ValidateLayout(SectionEqualVolumeLayout layout)
+    {
+        if (layout is not (SectionEqualVolumeLayout.OneSide32 or SectionEqualVolumeLayout.EightSide16))
+        {
+            throw new ArgumentOutOfRangeException(nameof(layout), layout, "The equal-volume layout is undefined.");
+        }
+    }
+
+    private static void ValidateDenseSections(BlockStateId[][] sections, SectionEqualVolumeLayout layout)
+    {
+        ArgumentNullException.ThrowIfNull(sections);
+        ValidateLayout(layout);
+        int expectedCount = layout == SectionEqualVolumeLayout.OneSide32 ? 1 : 8;
+        int expectedVolume = layout == SectionEqualVolumeLayout.OneSide32 ? CubeVolume : 16 * 16 * 16;
+        if (sections.Length != expectedCount || sections.Any(section => section is null || section.Length != expectedVolume))
+        {
+            throw new ArgumentException(
+                $"The dense {layout} layout requires exactly {expectedCount} arrays of {expectedVolume} states.",
+                nameof(sections));
+        }
     }
 
     private static void DecomposeGlobalIndex(int globalIndex, out int x, out int y, out int z)
