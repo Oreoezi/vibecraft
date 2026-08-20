@@ -4,7 +4,7 @@ using VibeCraft.Primitives.Revisions;
 
 namespace VibeCraft.WorldModel.Sections;
 
-internal sealed class SectionBlockStateSnapshot : IReadOnlySectionBlockStates
+internal sealed class SectionBlockStateSnapshot : IReadOnlySectionBlockStates, ISectionBlockStateSnapshot
 {
     private readonly BlockStateStorage _storage;
 
@@ -66,6 +66,11 @@ internal sealed class SectionBlockStateSnapshot : IReadOnlySectionBlockStates
     public BlockStateId Get(LocalBlock local)
     {
         return _storage.Get(Geometry.GetLocalIndex(local));
+    }
+
+    public BlockStateId GetBlockState(LocalIndex index)
+    {
+        return _storage.Get(index);
     }
 
     public void CopyTo(Span<BlockStateId> destination)
