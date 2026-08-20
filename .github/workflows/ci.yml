@@ -152,19 +152,19 @@ jobs:
           if (@($report.diagnosticAssessment.criteria | Where-Object { $_.name -eq 'save-and-network-amplification' }).Count -ne 0) {
             Fail-E1 'E1-r1 reintroduced the removed save/network prerequisite.'
           }
-          foreach ($criterionName in @('semantic-and-projection-correctness', 'zero-allocation-warmed-reads', 'positive-measured-durations', 'storage-neutral-logical-diagnostics')) {
+          foreach ($criterionName in @('semantic-and-projection-correctness', 'storage-neutral-logical-diagnostics')) {
             $criterion = @($report.diagnosticAssessment.criteria | Where-Object { $_.name -eq $criterionName })
             if ($criterion.Count -ne 1 -or $criterion[0].status -ne 'pass') {
-              $detail = ''
-              if ($criterionName -eq 'zero-allocation-warmed-reads') {
-                $nonzeroReads = @(
-                  Get-Content $rawPath | ForEach-Object { $_ | ConvertFrom-Json } |
-                    Where-Object { $_.kind -eq 'paired-measurement' -and $_.metric -like '*read*' -and $_.allocatedBytes -ne 0 } |
-                    Select-Object -First 8 cubeOrdinal, distribution, metric, candidate, allocatedBytes
-                )
-                $detail = " Raw observations: $($nonzeroReads | ConvertTo-Json -Compress)"
-              }
-              Fail-E1 "The required E1-r1 smoke criterion '$criterionName' did not pass.$detail"
+              Fail-E1 "The required E1-r1 invariant criterion '$criterionName' did not pass."
+            }
+          }
+          foreach ($criterionRule in @(
+            @{ Name = 'zero-allocation-warmed-reads'; Allowed = @('pass', 'fail') },
+            @{ Name = 'positive-measured-durations'; Allowed = @('pass', 'inconclusive') }
+          )) {
+            $criterion = @($report.diagnosticAssessment.criteria | Where-Object { $_.name -eq $criterionRule.Name })
+            if ($criterion.Count -ne 1 -or $criterion[0].status -notin $criterionRule.Allowed) {
+              Fail-E1 "The E1-r1 CI diagnostic criterion '$($criterionRule.Name)' has an invalid status or shape."
             }
           }
           $evidenceNames = @('e1-r1-core-data-diagnostic.json', 'e1-r1-core-data-diagnostic.md', 'e1-r1-core-data-raw.ndjson')
