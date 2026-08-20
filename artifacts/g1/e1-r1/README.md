@@ -15,3 +15,8 @@ artifact here is a world, persistence, network, or wire format.
 
 The immutable failed baseline remains under `artifacts/g1/e1/full-observational/`.
 See `docs/implementation/G1/E1-r1-protocol.md` for exact hashes and protocol rules.
+
+Completed full diagnostics:
+
+- `diagnostic/adaptive-remediation-01/` — disposition `defer`; interpretation and
+  handoff in `docs/implementation/G1/E1-r1-diagnostic-01.md`.

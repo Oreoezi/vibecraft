@@ -141,6 +141,6 @@ The retained E1 revision-0 observation came from clean commit
 | `artifacts/g1/e1/full-observational/e1-core-data-observation.md` | `971205d601e1dc4c0fcfacb8b47a014c795ecb8542eaa026c6e5205456ad8ab1` |
 | `artifacts/g1/e1/full-observational/e1-core-data-raw.ndjson` | `2028eacc44cc9c9b3e45bd3b96d0235d7c7bd3f5959ead230ba31deb0131eb5f` |
 
-E1-r1 uses create-new artifact files and refuses to overwrite an existing evidence
-set. Diagnostic evidence belongs under `artifacts/g1/e1-r1/diagnostic/`; a future
-accepted decision run must use a separate issue-31 path.
+E1-r1 atomically publishes a new evidence-set directory and refuses to overwrite an
+existing path. Diagnostic evidence belongs under `artifacts/g1/e1-r1/diagnostic/`;
+a future accepted decision run must use a separate issue-31 path.
