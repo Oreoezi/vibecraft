@@ -448,7 +448,7 @@ public sealed class SectionBlockStatesTests
         ];
 
         Assert.Equal(
-            ["VibeCraft.G1.Benchmarks", "VibeCraft.G1.Tests", "VibeCraft.LogicalCodecs"],
+            ["VibeCraft.G1.Benchmarks", "VibeCraft.G1.Tests"],
             friends);
     }
 
